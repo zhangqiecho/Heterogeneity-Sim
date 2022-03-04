@@ -1,0 +1,376 @@
+running
+  '/Library/Frameworks/R.framework/Versions/4.1-arm64/Resources/bin/R --no-echo --no-restore --no-save --no-restore --file=./code/sim_run.R --args 10 100 hello_world!'
+
+── Attaching packages ─────────────────────────────────────── tidyverse 1.3.1 ──
+✔ ggplot2 3.3.5     ✔ purrr   0.3.4
+✔ tibble  3.1.6     ✔ dplyr   1.0.8
+✔ tidyr   1.2.0     ✔ stringr 1.4.0
+✔ readr   2.1.2     ✔ forcats 0.5.1
+── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::between()   masks data.table::between()
+✖ dplyr::filter()    masks stats::filter()
+✖ dplyr::first()     masks data.table::first()
+✖ dplyr::lag()       masks stats::lag()
+✖ dplyr::last()      masks data.table::last()
+✖ purrr::transpose() masks data.table::transpose()
+here() starts at /Users/ain/Dropbox/Research/Projects/Ongoing/Heterogeneity-Sim
+
+Attaching package: ‘VGAM’
+
+The following object is masked from ‘package:tidyr’:
+
+    fill
+
+
+Attaching package: ‘xgboost’
+
+The following object is masked from ‘package:dplyr’:
+
+    slice
+
+
+Attaching package: ‘nlme’
+
+The following object is masked from ‘package:dplyr’:
+
+    collapse
+
+This is mgcv 1.8-38. For overview type 'help("mgcv-package")'.
+
+Attaching package: ‘mgcv’
+
+The following object is masked from ‘package:VGAM’:
+
+    s
+
+
+Attaching package: ‘Matrix’
+
+The following objects are masked from ‘package:tidyr’:
+
+    expand, pack, unpack
+
+Loaded glmnet 4.1-3
+Welcome! Want to learn more? See two factoextra-related books at https://goo.gl/ve3WBa
+
+Attaching package: ‘foreach’
+
+The following objects are masked from ‘package:purrr’:
+
+    accumulate, when
+
+Loaded gam 1.20
+
+
+Attaching package: ‘gam’
+
+The following objects are masked from ‘package:mgcv’:
+
+    gam, gam.control, gam.fit, s
+
+The following object is masked from ‘package:VGAM’:
+
+    s
+
+Super Learner
+Version: 2.0-28
+Package created on 2021-05-04
+
+Number of Simulations: 10 
+Sample Size for Each Sim: 100 
+Do you have anything to say?: hello_world! 
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 9 proposed 2 as the best number of clusters 
+* 4 proposed 3 as the best number of clusters 
+* 1 proposed 4 as the best number of clusters 
+* 2 proposed 5 as the best number of clusters 
+* 2 proposed 6 as the best number of clusters 
+* 1 proposed 8 as the best number of clusters 
+* 3 proposed 14 as the best number of clusters 
+* 1 proposed 15 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  2 
+ 
+ 
+******************************************************************* 
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 7 proposed 2 as the best number of clusters 
+* 9 proposed 3 as the best number of clusters 
+* 1 proposed 7 as the best number of clusters 
+* 1 proposed 9 as the best number of clusters 
+* 1 proposed 12 as the best number of clusters 
+* 2 proposed 13 as the best number of clusters 
+* 1 proposed 14 as the best number of clusters 
+* 1 proposed 15 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  3 
+ 
+ 
+******************************************************************* 
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 9 proposed 2 as the best number of clusters 
+* 2 proposed 3 as the best number of clusters 
+* 1 proposed 4 as the best number of clusters 
+* 3 proposed 5 as the best number of clusters 
+* 2 proposed 7 as the best number of clusters 
+* 1 proposed 10 as the best number of clusters 
+* 1 proposed 13 as the best number of clusters 
+* 1 proposed 14 as the best number of clusters 
+* 4 proposed 15 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  2 
+ 
+ 
+******************************************************************* 
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 10 proposed 2 as the best number of clusters 
+* 2 proposed 3 as the best number of clusters 
+* 5 proposed 5 as the best number of clusters 
+* 1 proposed 10 as the best number of clusters 
+* 1 proposed 12 as the best number of clusters 
+* 4 proposed 13 as the best number of clusters 
+* 1 proposed 15 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  2 
+ 
+ 
+******************************************************************* 
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 12 proposed 2 as the best number of clusters 
+* 4 proposed 3 as the best number of clusters 
+* 1 proposed 7 as the best number of clusters 
+* 4 proposed 8 as the best number of clusters 
+* 1 proposed 12 as the best number of clusters 
+* 2 proposed 14 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  2 
+ 
+ 
+******************************************************************* 
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 5 proposed 2 as the best number of clusters 
+* 4 proposed 3 as the best number of clusters 
+* 1 proposed 5 as the best number of clusters 
+* 2 proposed 6 as the best number of clusters 
+* 1 proposed 9 as the best number of clusters 
+* 1 proposed 10 as the best number of clusters 
+* 2 proposed 11 as the best number of clusters 
+* 4 proposed 13 as the best number of clusters 
+* 1 proposed 14 as the best number of clusters 
+* 2 proposed 15 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  2 
+ 
+ 
+******************************************************************* 
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 5 proposed 2 as the best number of clusters 
+* 3 proposed 3 as the best number of clusters 
+* 3 proposed 4 as the best number of clusters 
+* 2 proposed 5 as the best number of clusters 
+* 7 proposed 13 as the best number of clusters 
+* 3 proposed 15 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  13 
+ 
+ 
+******************************************************************* 
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 8 proposed 2 as the best number of clusters 
+* 6 proposed 3 as the best number of clusters 
+* 1 proposed 10 as the best number of clusters 
+* 1 proposed 11 as the best number of clusters 
+* 3 proposed 12 as the best number of clusters 
+* 1 proposed 14 as the best number of clusters 
+* 3 proposed 15 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  2 
+ 
+ 
+******************************************************************* 
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 5 proposed 2 as the best number of clusters 
+* 4 proposed 3 as the best number of clusters 
+* 1 proposed 4 as the best number of clusters 
+* 1 proposed 5 as the best number of clusters 
+* 7 proposed 7 as the best number of clusters 
+* 2 proposed 11 as the best number of clusters 
+* 3 proposed 15 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  7 
+ 
+ 
+******************************************************************* 
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 5 proposed 2 as the best number of clusters 
+* 3 proposed 3 as the best number of clusters 
+* 6 proposed 4 as the best number of clusters 
+* 1 proposed 5 as the best number of clusters 
+* 1 proposed 12 as the best number of clusters 
+* 5 proposed 13 as the best number of clusters 
+* 1 proposed 14 as the best number of clusters 
+* 1 proposed 15 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  4 
+ 
+ 
+******************************************************************* 
+   user  system elapsed 
+  8.911   0.191   9.133 
+There were 50 or more warnings (use warnings() to see the first 50)
+[[1]]
+(Intercept)           m          c1          c2          c3          c4 
+ 82.6306950   3.7558427   3.9853204   5.0582451   3.3608308  -0.8440271 
+         c5 
+ -2.1923492 
+
+[[2]]
+(Intercept)           m          c1          c2          c3          c4 
+  81.334653   10.651828    6.629806    4.684158   -2.677134    2.379883 
+         c5 
+  -2.011151 
+
+[[3]]
+[[3]]$Group.1
+[1] 1 2
+
+[[3]]$x
+[1]  4.000047 -2.662008
+
+
+[[4]]
+ [1]    26.107757  -136.161892  -110.521504   -97.367196    -8.120823
+ [6]   -34.341698    42.133322    18.985919 20533.098566 58990.334742
+[11] 38420.669908 33114.358353 12833.453989 23491.323426 17716.227435
+[16] 20975.033871
+

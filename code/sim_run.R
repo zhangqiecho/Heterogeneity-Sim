@@ -27,14 +27,18 @@ logit <- function(x){ log(x/(1-x)) }
 true1 <- 6
 true2 <- 3
 
-number_sims <- args[1]
+number_sims <- as.numeric(args[1])
 
-sample_size <- args[2]
+cat(paste("Number of Simulations:", number_sims, "\n"))
+
+sample_size <- as.numeric(args[2])
+
+cat(paste("Sample Size for Each Sim:", sample_size), "\n")
 
 random_argument_for_checking <- args[3]
 
 # this should say "hello_world!"
-print(random_argument_for_checking)
+cat(paste("Do you have anything to say?:",random_argument_for_checking), "\n")
 
 ## FUNCTION
 cluster_sim <- function(nsim, sample_size){
@@ -109,8 +113,10 @@ cluster_sim <- function(nsim, sample_size){
   
   # now search for clusters
   #trying the NbClust package
+  pdf(file = NULL)
   clust <- NbClust(data = clust_dat, diss=NULL, distance = "euclidean", min.nc = 2, max.nc = 15, method = "kmeans", index = "all", alphaBeale = 0.1)
-  
+  dev.off()
+
   df <- data.frame(clust$Best.nc[1,1:26])
   names(df) <- "number_clust"
   row.names(df) <- NULL
@@ -151,49 +157,4 @@ system.time(results <- lapply(1:number_sims, function(x) cluster_sim(nsim=x,samp
 
 saveRDS(results, file = here("data","Results.Rds"))
 
-results[[1]] #output from the first simulation run
-#estimated effect of m is [[2]]-[[1]] for the 
-####
-#
-# Next Steps: 
-#
-# 10 runs with N = 1,000 (338.69 seconds) 5 mins
-# 20 runs with N = 1,000 (667.31 seconds) 10 mins
-# 40 runs with N = 1,000 (1300.45 seconds) 20 mins
-# 60 runs with N = 1,000 (2420.32 seconds) 40 mins
-# 
-#
-runs <- c(10, 20, 40, 60)
-minutes <- c(5, 10, 20, 40)
-sim_time <- data.frame(runs, minutes)
-ggplot(sim_time, aes(runs, minutes)) +
-  geom_point() +
-  ggtitle("Time to run simulations with sample size of 1,000")
-#
-#
-####
-#
-
-### COMPILING THE RESULTS
-res <- do.call(rbind, results)
-res <- as.data.frame(res)
-
-#What percentage of runs result in n = 2 clusters?
-#select the number of clusters from each run
-number_of_cluster <-matrix(NA, ncol = 1)
-clusters <- for(i in 1:1000){
-  #number_of_clusters <- rbind(number_of_clusters, max(results[[i]][[3]]$Group.1))
-  number_of_cluster <- rbind(number_of_cluster,as.matrix(max(results[[i]][[3]]$Group.1)))
-}
-number_of_cluster <- number_of_cluster[-1,]
-table(number_of_cluster)
-
-saveRDS(results, file = here("data","Results.Rds"))
-
-#need to store cluster_num
-
-#based on the output from the function
-#write a second program - post processing program (the code needed to analyze the data from this function)
-#handle each component of the results object to give you the effect among the different strata
-
-str(Results)
+print(results[[1]])

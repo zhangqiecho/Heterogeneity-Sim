@@ -11,4 +11,4 @@ module purge
 module load R
 
 # Simulation Run Script
-Rscript --no-save --no-restore --verbose ./code/sim_run.R 10 100 "hello_world!"  > sim_run.Rout 2>&1
+Rscript --no-save --no-restore --verbose ./code/sim_run.R 10 100 "hello_world\!"  > ./misc/sim_run.Rout 2>&1
