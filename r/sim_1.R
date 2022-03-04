@@ -8,15 +8,9 @@
 #
 ###################################################################################################################
 
-# THIS IS A TEST: CAN I SUCCESSFULLY PUSH TO GH
-
 ####################################################
 #               LOAD IN PACKAGES
 ####################################################
-
-#packages <- c("data.table","tidyverse","skimr","here","mvtnorm","latex2exp","earth",
-           #   "readxl","VGAM", "coefvgam", "ranger","xgboost","mgcv","glmnet","NbClust","factoextra",
-            #  "SuperLearner", "AIPW", "dplyr", "cluster", "ggplot2")
 
 packages <- c("data.table","tidyverse","skimr","here","mvtnorm","latex2exp","earth",
    "readxl","VGAM", "ranger","xgboost","mgcv","glmnet","NbClust","factoextra",
