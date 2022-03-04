@@ -146,13 +146,10 @@ cluster_sim <- function(nsim, sample_size){
   return(res)
 }                                                                               
 
-summary(cluster_reg)
-#cluster_sim(nsim = 6, sample = 100)
-##############################################################
-
 ### RUNNING THE FUNCTION
-system.time(results <- lapply(1:1000, function(x) cluster_sim(nsim=x,sample_size=1000))) #Error: $ operator not defined for this S4 class [instead of $, use]
-saveRDS(results, file = 'Results.Rds')
+system.time(results <- lapply(1:number_sims, function(x) cluster_sim(nsim=x,sample_size=sample_size)))
+
+saveRDS(results, file = here("data","Results.Rds"))
 
 results[[1]] #output from the first simulation run
 #estimated effect of m is [[2]]-[[1]] for the 
@@ -191,7 +188,7 @@ clusters <- for(i in 1:1000){
 number_of_cluster <- number_of_cluster[-1,]
 table(number_of_cluster)
 
-saveRDS(results, file = 'Results.Rds')
+saveRDS(results, file = here("data","Results.Rds"))
 
 #need to store cluster_num
 
