@@ -1,16 +1,8 @@
-###################################################################################################################
-#
-# Purpose: Simulation Model 
-#
-# Model 1: Y <- intercept + x*a + m*b - d*x*m + c1...c5 + error
-#
-# Last Update: 29 Jan 2022
-#
-###################################################################################################################
+#!/usr/bin/env Rscript
+args = commandArgs(trailingOnly=TRUE)
 
-####################################################
-#               LOAD IN PACKAGES
-####################################################
+## NOTE: We can run this program locally from the command line, and thus leave the package 
+## installation as is. Once we run on cluster, need to change library location.
 
 packages <- c("data.table","tidyverse","skimr","here","mvtnorm","latex2exp","earth",
    "readxl","VGAM", "ranger","xgboost","mgcv","glmnet","NbClust","factoextra",
@@ -26,41 +18,30 @@ for (package in packages) {
   library(package, character.only=T)
 }
 
-thm <- theme_classic() +
-  theme(
-    legend.position = "top",
-    legend.background = element_rect(fill = "transparent", colour = NA),
-    legend.key = element_rect(fill = "transparent", colour = NA)
-  )
-theme_set(thm)
-
+# CREATE EXPIT AND LOGIT FUNCTIONS
+expit <- function(x){ exp(x)/(1+exp(x)) }
+logit <- function(x){ log(x/(1-x)) }
 
 ## FUNCTION SET-UP
 ## TRUE VALUES
 true1 <- 6
 true2 <- 3
 
-#nsim <- 5                                                                        #cancelled out when function is ran
+number_sims <- args[1]
 
-#DUMMY TABLE TO EXPORT THE RESULTS OF THE SIMULATION
-#cols <- c("point_est1", "point_est2", "num_clust")
-#cols <- c(cols, "nsim")
-#res.est <- data.frame(matrix(nrow=nsim,ncol=length(cols)))
-#colnames(res.est) <- cols
-#res.se <- res.est
+sample_size <- args[2]
 
-# CREATE EXPIT AND LOGIT FUNCTIONS
-expit <- function(x){ exp(x)/(1+exp(x)) }
-logit <- function(x){ log(x/(1-x)) }
+random_argument_for_checking <- args[3]
+
+# this should say "hello_world!"
+print(random_argument_for_checking)
 
 ## FUNCTION
-cluster_sim <- function(nsim, sample_size){                             
-  i = nsim
-  #i = 6
-  n = sample_size                                                                      
-  #n = 100
+cluster_sim <- function(nsim, sample_size){
+  
+  n = sample_size
   p = 5
-  set.seed(i)                                                                 
+  set.seed(nsim)
   
   ## CONFOUNDERS (C = 5)
   sigma <- matrix(0,nrow=p,ncol=p); diag(sigma) <- 1
@@ -80,9 +61,10 @@ cluster_sim <- function(nsim, sample_size){
   mu      <- muMatT%*%beta
   
   # PROPENSITY SCORE MODEL
-  pi   <- expit(piMatT%*%theta)
+  ## pi is an actual parameter in base R, so good practice not to overwrite
+  pi_x   <- expit(piMatT%*%theta)
   pi_m <- expit(piMatT2%*%theta2)
-  x    <- rbinom(n,1,pi)
+  x    <- rbinom(n,1,pi_x)
   m    <- rbinom(n,1,pi_m)
   
   # OUTCOME MODEL: EXPOSURE VALUE UNDER M == 0 IS 6; VALUE UNDER M == 1 IS 3
