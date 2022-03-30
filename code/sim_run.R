@@ -4,6 +4,10 @@ args = commandArgs(trailingOnly=TRUE)
 ## NOTE: We can run this program locally from the command line, and thus leave the package 
 ## installation as is. Once we run on cluster, need to change library location.
 
+## where is the library?
+userLib <-  "~/R/R_LIBS_USER"
+.libPaths(userLib)
+
 packages <- c("data.table","tidyverse","skimr","here","mvtnorm","latex2exp","earth",
    "readxl","VGAM", "ranger","xgboost","mgcv","glmnet","NbClust","factoextra",
   "SuperLearner", "AIPW", "dplyr", "cluster", "ggplot2")
@@ -127,7 +131,7 @@ cluster_sim <- function(nsim, sample_size){
   }
   
   cluster_num <- getmode(df$number_clust)
-  kmeans_res <- kmeans(clust_dat, centers = cluster_num, nstart = 25)
+  kmeans_res <- kmeans(clust_dat, centers = cluster_num, max.iter=100, nstart = 25)
   
   dat$cluster <- kmeans_res$cluster # check: this should give us a cluster number for each obs in the original data
   dat$diff <- dat$mu1-dat$mu0
