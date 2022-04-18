@@ -75,19 +75,29 @@ cluster_sim <- function(nsim, sample_size){
   x    <- rbinom(n,1,pi_x)
   m    <- rbinom(n,1,pi_m)
   
-  # OUTCOME MODEL: EXPOSURE VALUE UNDER M == 0 IS 6; VALUE UNDER M == 1 IS 3
-  y0 <- 86 + 3*m[x==0] + 4*c[x==0,1] + 3*c[x==0,2] + 2*c[x==0,3] + 1*c[x==0,4] + 1*c[x==0,5] + rnorm(sum(1-x),0,20)                        #the difference in these two models may be explaining the quasi/complete separation
-  y1 <- 88 + 6*m[x==1] + 4*c[x==1,1] + 3*c[x==1,2] + 2*c[x==1,3] + 1*c[x==1,4] + 1*c[x==1,5] + rnorm(sum(x),0,20)
+# OUTCOME MODEL: EXPOSURE VALUE UNDER M == 0 IS 7.5; VALUE UNDER M = 1 IS -7.5
+ y <- 80 + 7.5*x + 7.5*m - 15*x*m + rnorm(length(x),0,20)
+
+ ### UNDER M = 1: (80 + 7.5*1 + 7.5*1 - 15*1*1) - (80 + 7.5*0 + 7.5*1 - 15*0*1)
+ ### UNDER M = 1: (80 + 7.5*1 + 7.5*1 - 15*1*1) - (80 + 7.5*0 + 7.5*1 - 15*0*1)
+ ######: 7.5 - 15 = -7.5
+
+# OUTCOME MODEL: EXPOSURE VALUE UNDER M == 0 IS 6; VALUE UNDER M == 1 IS 3
+  # y0 <- 86 + 3*m[x==0] + 4*c[x==0,1] + 3*c[x==0,2] + 2*c[x==0,3] + 1*c[x==0,4] + 1*c[x==0,5] + rnorm(sum(1-x),0,20)                        #the difference in these two models may be explaining the quasi/complete separation
+  # y1 <- 88 + 6*m[x==1] + 4*c[x==1,1] + 3*c[x==1,2] + 2*c[x==1,3] + 1*c[x==1,4] + 1*c[x==1,5] + rnorm(sum(x),0,20)
   
   #y0 <- 88 + 3*m[x==0] + 4*c[x==0,1] + 3*c[x==0,2] + 2*c[x==0,3] + 1*c[x==0,4] + 1*c[x==0,5] + rnorm(sum(1-x),0,20)                        #the difference in these two models may be explaining the quasi/complete separation
   #y1 <- 86 + 6*m[x==1] + 1*c[x==1,1] + 1*c[x==1,2] - 1.5*c[x==1,3] - 5*c[x==1,4] + 1*c[x==1,5] + rnorm(sum(x),0,15)
   #ATE: y1-y0 --> average over all of these differences in effects (rather than pure effect measure modification)
-  d0 <- data.frame(y0,m[x==0],c[x==0,],x=0);names(d0) <- c("y","m",paste0("c",1:5),"x")
-  d1 <- data.frame(y1,m[x==1],c[x==1,],x=1);names(d1) <- c("y","m",paste0("c",1:5),"x")
+  # d0 <- data.frame(y0,m[x==0],c[x==0,],x=0);names(d0) <- c("y","m",paste0("c",1:5),"x")
+  # d1 <- data.frame(y1,m[x==1],c[x==1,],x=1);names(d1) <- c("y","m",paste0("c",1:5),"x")
   
-  # DATA
-  dat <- tibble(rbind(d0,d1))
-  dat
+  # # DATA
+  # dat <- tibble(rbind(d0,d1))
+  # dat
+
+  dat <- data.frame(y,m,c,x)
+  names(dat) <- c("y","m",paste0("c",1:5),"x")
   
   ## DATA GENERATION FINISHED
   
@@ -95,10 +105,12 @@ cluster_sim <- function(nsim, sample_size){
   
   ## EXAMPLE 1
   ## simplest approach (for illustration), not recommended in practice
-  mod1_x1 <- glm(y ~ m + c1 + c2 + c3 + c4 + c5, data=subset(dat,x==1), family=gaussian(link="identity"))
-  mod1_x0 <- glm(y ~ m + c1 + c2 + c3 + c4 + c5, data=subset(dat,x==0), family=gaussian(link="identity"))
-  summary(mod1_x1)
-  summary(mod1_x0)
+  # mod1_x1 <- glm(y ~ m + c1 + c2 + c3 + c4 + c5, data=subset(dat,x==1), family=gaussian(link="identity"))
+  # mod1_x0 <- glm(y ~ m + c1 + c2 + c3 + c4 + c5, data=subset(dat,x==0), family=gaussian(link="identity"))
+  # summary(mod1_x1)
+  # summary(mod1_x0)
+
+  mod1 <- glm(y ~ x + m + x*m, data=dat, family=gaussian(link="identity"))
   
   # dat1 <- transform(dat,x=1)
   # dat0 <- transform(dat,x=0)
@@ -106,8 +118,11 @@ cluster_sim <- function(nsim, sample_size){
   # head(dat1)
   # head(dat0)
   
-  dat$mu1 <- predict(mod1_x1,dat,type="response")
-  dat$mu0 <- predict(mod1_x0,dat,type="response")
+  # dat$mu1 <- predict(mod1_x1,dat,type="response")
+  # dat$mu0 <- predict(mod1_x0,dat,type="response")
+
+  dat$mu1 <- predict(mod1,newdata=transform(dat,x=1),type="response")
+  dat$mu0 <- predict(mod1,newdata=transform(dat,x=0),type="response")
   
   mean(dat$mu1-dat$mu0)
   
@@ -159,6 +174,6 @@ cluster_sim <- function(nsim, sample_size){
 ### RUNNING THE FUNCTION
 system.time(results <- lapply(1:number_sims, function(x) cluster_sim(nsim=x,sample_size=sample_size)))
 
-saveRDS(results, file = here("data","Results.Rds"))
+saveRDS(results, file = here("data",paste0("Results.Rds")))
 
 print(results[[1]])
