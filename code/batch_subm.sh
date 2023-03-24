@@ -2,13 +2,12 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=24
 #SBATCH --time=30-00:00:00
-#SBATCH --job-name=pp_run
+#SBATCH --job-name=het_sim_test
 #SBATCH --mem=120g
 #SBATCH --partition=naimi
-#SBATCH --array=1-5
 
 module purge
 module load R
 
 # Simulation Run Script
-Rscript --no-save --no-restore --verbose ./code/sim_run.R 10 100 "hello_world\!"  > ./misc/sim_run.Rout 2>&1
+Rscript --no-save --no-restore --verbose ~/Hetergeneity-Sim/code/sim_run_grf.R 50 1000  > ./misc/sim_run_grf.Rout 2>&1

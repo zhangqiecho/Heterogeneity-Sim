@@ -105,30 +105,32 @@ cluster_sim <- function(nsim, sample_size){
   
   ## EXAMPLE 1
   ## simplest approach (for illustration), not recommended in practice
-  # mod1_x1 <- glm(y ~ m + c1 + c2 + c3 + c4 + c5, data=subset(dat,x==1), family=gaussian(link="identity"))
-  # mod1_x0 <- glm(y ~ m + c1 + c2 + c3 + c4 + c5, data=subset(dat,x==0), family=gaussian(link="identity"))
-  # summary(mod1_x1)
-  # summary(mod1_x0)
+  mod1_x1 <- glm(y ~ m + c1 + c2 + c3 + c4 + c5, data=subset(dat,x==1), family=gaussian(link="identity"))
+  mod1_x0 <- glm(y ~ m + c1 + c2 + c3 + c4 + c5, data=subset(dat,x==0), family=gaussian(link="identity"))
+  summary(mod1_x1)
+  summary(mod1_x0)
 
-  mod1 <- glm(y ~ x + m + x*m, data=dat, family=gaussian(link="identity"))
+  # mod1 <- glm(y ~ x + m + x*m, data=dat, family=gaussian(link="identity"))
   
-  # dat1 <- transform(dat,x=1)
-  # dat0 <- transform(dat,x=0)
+  dat1 <- transform(dat,x=1)
+  dat0 <- transform(dat,x=0)
   # 
   # head(dat1)
   # head(dat0)
   
-  # dat$mu1 <- predict(mod1_x1,dat,type="response")
-  # dat$mu0 <- predict(mod1_x0,dat,type="response")
+  dat$mu1 <- predict(mod1_x1,dat,type="response")
+  dat$mu0 <- predict(mod1_x0,dat,type="response")
 
-  dat$mu1 <- predict(mod1,newdata=transform(dat,x=1),type="response")
-  dat$mu0 <- predict(mod1,newdata=transform(dat,x=0),type="response")
+  # dat$mu1 <- predict(mod1,newdata=transform(dat,x=1),type="response")
+  # dat$mu0 <- predict(mod1,newdata=transform(dat,x=0),type="response")
   
   mean(dat$mu1-dat$mu0)
   
   clust_dat <- dat %>% select(mu0, mu1)
   
   clust_dat
+  
+  plot(clust_dat)
   
   # now search for clusters
   #trying the NbClust package
@@ -146,11 +148,16 @@ cluster_sim <- function(nsim, sample_size){
   }
   
   cluster_num <- getmode(df$number_clust)
-  kmeans_res <- kmeans(clust_dat, centers = cluster_num, max.iter=100, nstart = 25)
+  kmeans_res <- kmeans(clust_dat, centers = cluster_num, iter.max = 100, nstart = 25)
   
   dat$cluster <- kmeans_res$cluster # check: this should give us a cluster number for each obs in the original data
   dat$diff <- dat$mu1-dat$mu0
-  cluster_effects <- aggregate(dat$diff, list(dat$cluster), mean) #we should technically see that it is yielding two clusters and the average output to be equal to the truth (if working appropriately)
+  
+  summary(glm(cluster ~ ., data=subset(dat, select=c(-diff, -mu1, -mu0))))
+  
+  cluster_mod <- lm(diff ~ as.numeric(cluster==2), data=dat)
+  cluster_effects <- c(cluster_mod$coefficients[1], 
+                       cluster_mod$coefficients[1]+cluster_mod$coefficients[2])
   
   if(cluster_num > 2){
     cluster_reg <- vglm(cluster~.,data=subset(dat,select=-c(y,mu0,mu1,diff)),family="multinomial") 
