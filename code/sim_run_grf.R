@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# args = commandArgs(trailingOnly=TRUE)
+args = commandArgs(trailingOnly=TRUE)
 
 ## NOTE: We can run this program locally from the command line, and thus leave the package 
 ## installation as is. Once we run on cluster, need to change library location.
@@ -25,7 +25,7 @@ for (package in packages) {
 remotes::install_github('susanathey/causalTree')
 library(causalTree)
 
-args = c(5,1000)
+#args = c(5,1000)
 
 # CREATE EXPIT AND LOGIT FUNCTIONS
 expit <- function(x){ exp(x)/(1+exp(x)) }
