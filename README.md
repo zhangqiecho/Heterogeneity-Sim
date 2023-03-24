@@ -10,7 +10,7 @@ The purpose of this file in the initial phase is to:
 - test the grf algorithm's ability to estimate CATEs in simple settings
 
 The goal of the initial phase is the write programs that will enable us to deploy 
-simulations on the (Rollins cluster)[https://ainaimi.github.io/resources/computing.html]
+simulations on the [Rollins cluster](https://ainaimi.github.io/resources/computing.html)
 
 *Phase 1* will be completed when we have programs that can be deployed on the cluster
 and that return figures and tables with results (bias, mse, CI coverage) from our 
