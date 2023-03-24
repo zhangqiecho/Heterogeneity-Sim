@@ -170,6 +170,7 @@ cluster_sim <- function(nsim, sample_size){
   ate_m0_grf <- average_treatment_effect(cf, subset = m == 0) # ate = 7.7 when m = 0
 
   res <- data.frame(
+	estimator = c("CATE_m0","CATE_m1","CATE_m0_grf","CATE_m1_grf"),
     rbind(
       ate_m0,
       ate_m1,
@@ -177,8 +178,6 @@ cluster_sim <- function(nsim, sample_size){
       ate_m1_grf
     ) 
   )
-  
-  tibble::rownames_to_column(res, "estimator")
   
   return(res)
 }                                                                               
