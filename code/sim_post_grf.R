@@ -18,19 +18,35 @@ thm <- theme_classic() +
   )
 theme_set(thm)
 
-readRDS(here("data","Results.Rds"))
-#output from the first simulation run
-#estimated effect of m is [[2]]-[[1]] for the 
-####
-#
-# Next Steps: 
-#
-# 10 runs with N = 1,000 (338.69 seconds) 5 mins
-# 20 runs with N = 1,000 (667.31 seconds) 10 mins
-# 40 runs with N = 1,000 (1300.45 seconds) 20 mins
-# 60 runs with N = 1,000 (2420.32 seconds) 40 mins
-# 
-#
+a <- read_csv(here("data","simulation_results-phase1.csv")) %>%
+  mutate(lcl = estimate - 1.96*std.err, 
+         ucl = estimate + 1.96*std.err, 
+         true = if_else(grepl("m0",estimator), 7.5, -7.5), 
+         cov = if_else(lcl<true & ucl>true, 1, 0))
+
+a
+
+a1 <- a %>% group_by(estimator) %>%
+  summarise(Bias = mean(estimate - true), 
+            MSE = mean((estimate - true)^2), 
+            SD_psi = sd(estimate),
+            mean_SE = mean(std.err),
+            coverage = mean(cov)) %>% 
+  filter(!grepl("grf", estimator))
+
+a2 <- a %>% group_by(estimator) %>%
+  summarise(Bias = mean(estimate - true), 
+            MSE = mean((estimate - true)^2), 
+            SD_psi = sd(estimate),
+            mean_SE = mean(std.err),
+            coverage = mean(cov)) %>% 
+  filter(grepl("grf", estimator))
+
+rbind(a1,a2)
+
+
+
+
 runs <- c(10, 20, 40, 60)
 minutes <- c(5, 10, 20, 40)
 sim_time <- data.frame(runs, minutes)
