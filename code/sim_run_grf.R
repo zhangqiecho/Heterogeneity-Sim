@@ -24,6 +24,11 @@ for (package in packages) {
 
 remotes::install_github('susanathey/causalTree')
 library(causalTree)
+remotes::install_github('tlverse/tlverse')
+library(tmle3)
+library(sl3)
+remotes::install_github('yqzhong7/AIPW')
+library(AIPW)
 
 #args = c(5,1000)
 
@@ -35,6 +40,9 @@ number_sims <- as.numeric(args[1])
 cat(paste("Number of Simulations:", number_sims, "\n"))
 sample_size <- as.numeric(args[2])
 cat(paste("Sample Size for Each Sim:", sample_size), "\n")
+
+nsim<-123
+sample_size<-1000
 
 ## FUNCTION
 cluster_sim <- function(nsim, sample_size){
@@ -132,23 +140,120 @@ cluster_sim <- function(nsim, sample_size){
     tune.parameters = "all"
     )
   
-  # ggplot(data.frame(W.hat = cf$W.hat, W = factor(cf$W.orig))) +
-  #   geom_histogram(aes(x = W.hat, y = stat(density), fill = x), alpha=0.3, position = "identity") +
-  #   geom_density(aes(x = W.hat, color = x)) +
-  #   xlim(0,1) +
-  #   labs(title = "Causal forest propensity scores",
-  #        caption = "The propensity scores are learned via GRF's regression forest")
-
   ate_m1_grf <- average_treatment_effect(cf, subset = m == 1) # ate = -6.8 when m = 1
   ate_m0_grf <- average_treatment_effect(cf, subset = m == 0) # ate = 7.7 when m = 0
+  
+  # TMLE
+  
+  sl3_list_learners("continuous") 
+  
+  lrnr_mean <- make_learner(Lrnr_mean)
+  lrnr_glm <- make_learner(Lrnr_glm)
+  
+  # ranger learner
+  grid_params <- list(num.trees = c(250, 1000),
+                      mtry = c(3,4),
+                      min.node.size = c(50,100))
+  grid <- expand.grid(grid_params, KEEP.OUT.ATTRS = FALSE)
+  lrnr_ranger <- vector("list", length = nrow(grid))
+  for(i in 1:nrow(grid)){
+    lrnr_ranger[[i]] <- make_learner(Lrnr_ranger, 
+                                     num.trees=grid[i,]$num.trees, 
+                                     mtry=grid[i,]$mtry,
+                                     min.node.size=grid[i,]$min.node.size)
+  }
+  ########################################################################
+  #lrnr_ranger <- make_learner(Lrnr_ranger)  ###########  FLAG! ###########
+  ########################################################################
+  
+  # glmnet learner
+  grid_params <- seq(0,1,by=.25)
+  lrnr_glmnet <- vector("list", length = length(grid_params))
+  for(i in 1:length(grid_params)){
+    lrnr_glmnet[[i]] <- make_learner(Lrnr_glmnet, alpha = grid_params[i])
+  }
+  ########################################################################
+  #lrnr_glmnet <- make_learner(Lrnr_glmnet)  ###########  FLAG! ###########
+  ########################################################################
+  
+  # xgboost learner
+  grid_params <- list(max_depth = c(4, 6),
+                      eta = c(0.1, 0.2),
+                      nrounds = c(100, 500)
+  )
+  grid <- expand.grid(grid_params, KEEP.OUT.ATTRS = FALSE)
+  lrnr_xgboost <- vector("list", length = nrow(grid))
+  for(i in 1:nrow(grid)){
+    lrnr_xgboost[[i]] <- make_learner(Lrnr_xgboost, max_depth=grid[i,]$max_depth, eta=grid[i,]$eta)
+  }
+  ########################################################################
+  #lrnr_xgboost <- make_learner(Lrnr_xgboost)  ##########  FLAG! ##########
+  ########################################################################
+  
+  # earth learner
+  grid_params <- c(3,4,5)
+  lrnr_earth <- vector("list", length = length(grid_params))
+  for(i in 1:length(grid_params)){
+    lrnr_earth[[i]] <- make_learner(Lrnr_earth, degree = grid_params[i])
+  }
+  ########################################################################
+  ##lrnr_earth <- make_learner(Lrnr_earth)  ############  FLAG! ############
+  ########################################################################
+  
+  sl_ranger <- make_learner(Stack, unlist(list(lrnr_ranger), 
+                                    recursive = TRUE))
+  sl_xgboost <- make_learner(Stack, unlist(list(lrnr_xgboost), 
+                                          recursive = TRUE))
+  sl_tree <- make_learner(Stack, unlist(list(lrnr_ranger,
+                                               lrnr_xgboost), 
+                                          recursive = TRUE))
+  sl_ <- make_learner(Stack, unlist(list(lrnr_ranger,
+                                         lrnr_xgboost,
+                                         lrnr_mean,
+                                         lrnr_glm,
+                                         lrnr_earth,
+                                         lrnr_glmnet), 
+                                        recursive = TRUE))
+  
+  # DEFINE SL_Y AND SL_A 
+  # We only need one, because they're the same
+  
+  learners_ <- c(sl_ranger, sl_xgboost, sl_tree, sl_)
+  
+  tmle0_list <- tmle1_list <- aipw0_list <- aipw1_list <- list()
+  for (i in 1:length(learners_)){
+  Q_learner <- Lrnr_sl$new(learners = learners_[i], 
+                           metalearner = Lrnr_nnls$new(convex=T))
+  g_learner <- Lrnr_sl$new(learners = learners_[i], 
+                           metalearner = Lrnr_nnls$new(convex=T))
+  learner_list <- list(Y = Q_learner,
+                       A = g_learner)
+  
+  ######################################################################
+  
+  # PREPARE THE THINGS WE WANT TO FEED IN TO TMLE3
+  ate_spec <- tmle_ATE(treatment_level = 1, control_level = 0)
+  
+  nodes_ <- list(W = c("c1", "c2", "c3", "c4", "c5"), 
+                 A = "x", 
+                 Y = "y")
+  
+  # RUN TMLE3 
+  set.seed(123)
+  tmle0_list[[i]] <- tmle3(ate_spec, subset(dat, m==0, select = -m), nodes_, learner_list)
+  tmle1_list[[i]] <- tmle3(ate_spec, subset(dat, m==1, select = -m), nodes_, learner_list)
 
+  }
+  
   res <- data.frame(
-	estimator = c("CATE_m0","CATE_m1","CATE_m0_grf","CATE_m1_grf"),
+	estimator = c("CATE_m0","CATE_m1","CATE_m0_grf","CATE_m1_grf","CATE_m1_tmle","CATE_m1_tmle"),
     rbind(
       ate_m0,
       ate_m1,
       ate_m0_grf,
-      ate_m1_grf
+      ate_m1_grf,
+      ate_m0_tmle,
+      ate_m1_tmle
     ) 
   )
   
