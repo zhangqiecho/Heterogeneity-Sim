@@ -83,33 +83,6 @@ cluster_sim <- function(nsim, sample_size){
   
   ate_m1 <- c(coef(mod_true) %*% c_matrix2, sqrt(t(c_matrix2) %*% vcov(mod_true) %*% c_matrix2))
   
-  # ## split sample into training and testing
-  # train_fraction <- .8  # Use train_fraction % of the dataset to train our models
-  # n <- dim(dat)[1]
-  # train_idx <- sample.int(n, replace=F, size=floor(n*train_fraction))
-  # df_train <- dat[train_idx,]
-  # df_test  <- dat[-train_idx,]
-  # 
-  # ## further split for selection and prediction
-  # # Diving the data 40%-40%-20% into splitting, estimation and validation samples
-  # split_size <- floor(nrow(df_train) * 0.5)
-  # split_idx <- sample(nrow(df_train), replace=FALSE, size=split_size)
-  # 
-  # # Make the splits
-  # df_split <- df_train[split_idx,]
-  # df_est <- df_train[-split_idx,]
-  # 
-  # # regression formula
-  # covariate_names <- names(dat)[-1]
-  # reg_formula <- paste("y ~", paste(covariate_names, collapse = " + "))
-  # 
-  # cf <- causal_forest(
-  #   X = as.matrix(df_train[,covariate_names]),
-  #   Y = df_train$y,
-  #   W = df_train$x,
-  #   num.trees=1000
-  #   )
-  
   # Qi: here are your tasks
   ## Ultimate goal: get one mean difference for M = 0, and one for M = 1
   
