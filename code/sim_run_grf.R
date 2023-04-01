@@ -8,9 +8,13 @@ args = commandArgs(trailingOnly=TRUE)
 userLib <-  "~/R/R_LIBS_USER"
 .libPaths(userLib)
 
-packages <- c("data.table","tidyverse","skimr","here","mvtnorm","latex2exp","earth",
-   "readxl","VGAM", "ranger","xgboost","mgcv","glmnet","NbClust","factoextra",
-  "SuperLearner", "AIPW", "dplyr", "cluster", "ggplot2", "estimatr","grf")
+packages <- c("data.table","tidyverse","skimr",
+              "here","mvtnorm","latex2exp","earth",
+              "readxl","VGAM", "ranger","xgboost",
+              "mgcv","glmnet","NbClust","factoextra",
+              "SuperLearner", "AIPW", "dplyr", "cluster", 
+              "ggplot2", "estimatr","grf", "DoubleML",
+              "mlr3","mlr3learners","mlr3pipelines")
 
 for (package in packages) {
   if (!require(package, character.only=T, quietly=T)) {
@@ -30,7 +34,7 @@ library(sl3)
 remotes::install_github('yqzhong7/AIPW')
 library(AIPW)
 
-#args = c(5,1000)
+args = c(5,1000)
 
 # CREATE EXPIT AND LOGIT FUNCTIONS
 expit <- function(x){ exp(x)/(1+exp(x)) }
@@ -40,9 +44,6 @@ number_sims <- as.numeric(args[1])
 cat(paste("Number of Simulations:", number_sims, "\n"))
 sample_size <- as.numeric(args[2])
 cat(paste("Sample Size for Each Sim:", sample_size), "\n")
-
-nsim<-123
-sample_size<-1000
 
 ## FUNCTION
 cluster_sim <- function(nsim, sample_size){
@@ -222,6 +223,7 @@ cluster_sim <- function(nsim, sample_size){
   
   tmle0_list <- tmle1_list <- aipw0_list <- aipw1_list <- list()
   for (i in 1:length(learners_)){
+    
   Q_learner <- Lrnr_sl$new(learners = learners_[i], 
                            metalearner = Lrnr_nnls$new(convex=T))
   g_learner <- Lrnr_sl$new(learners = learners_[i], 
@@ -245,15 +247,88 @@ cluster_sim <- function(nsim, sample_size){
 
   }
   
+  ate_m0_tmle_ranger <- cbind(tmle0_list[[3]]$estimates[[1]]$psi, 
+                              sqrt(var(tmle0_list[[1]]$estimates[[1]]$IC)/sum(1-m)))
+  
+  ate_m1_tmle_ranger <- cbind(tmle1_list[[1]]$estimates[[1]]$psi, 
+                              sqrt(var(tmle1_list[[1]]$estimates[[1]]$IC)/sum(m)))
+
+  
+  ate_m0_tmle_xgboost <- cbind(tmle0_list[[2]]$estimates[[1]]$psi, 
+                              sqrt(var(tmle0_list[[2]]$estimates[[1]]$IC)/sum(1-m)))
+  
+  ate_m1_tmle_xgboost <- cbind(tmle1_list[[2]]$estimates[[1]]$psi, 
+                              sqrt(var(tmle1_list[[2]]$estimates[[1]]$IC)/sum(m)))
+  
+  ate_m0_tmle_tree <- cbind(tmle0_list[[3]]$estimates[[1]]$psi, 
+                               sqrt(var(tmle0_list[[3]]$estimates[[1]]$IC)/sum(1-m)))
+  
+  ate_m1_tmle_tree <- cbind(tmle1_list[[3]]$estimates[[1]]$psi, 
+                               sqrt(var(tmle1_list[[3]]$estimates[[1]]$IC)/sum(m)))
+  
+  ate_m0_tmle_stacked <- cbind(tmle0_list[[4]]$estimates[[1]]$psi, 
+                            sqrt(var(tmle0_list[[4]]$estimates[[1]]$IC)/sum(1-m)))
+  
+  ate_m1_tmle_stacked <- cbind(tmle1_list[[4]]$estimates[[1]]$psi, 
+                            sqrt(var(tmle1_list[[4]]$estimates[[1]]$IC)/sum(m)))
+  
+  #Double Debiased ML
+  # dml0_data = DoubleMLData$new(subset(dat, m==0, select= -m),
+  #                              y_col = "y",
+  #                              d_cols = "x",
+  #                              x_cols = c("c1","c2","c3","c4","c5"))
+  # 
+  # lrn_ranger = lrn("regr.ranger",
+  #                  num.trees = c(250, 1000),
+  #                  mtry = c(3,4),
+  #                  min.node.size = c(50,100))
+  # lrn_ranger = lrn("regr.ranger",
+  #                  num.trees = c(250, 1000),
+  #                  mtry = c(3,4),
+  #                  min.node.size = c(50,100))
+  # 
+  # lrn_xgboost = lrn("regr.xgboost",
+  #                  nrounds = 500,
+  #                  max.depth = 5,
+  #                  min.node.size = 2)
+  # 
+  # ml_l_bonus = learner$clone()
+  # ml_m_bonus = learner$clone()
+  # 
+  # set.seed(123)
+  # obj_dml_plr_bonus = DoubleMLPLR$new(dml_data_bonus, 
+  #                                     ml_l = ml_l_bonus, 
+  #                                     ml_m = ml_m_bonus,
+  #                                     n_folds = 10,
+  #                                     n_rep = 1,
+  #                                     score = "partialling out",
+  #                                     dml_procedure = "dml2",
+  #                                     draw_sample_splitting = TRUE,
+  #                                     apply_cross_fitting = TRUE)
+  # obj_dml_plr_bonus$fit()
+  # obj_dml_plr_bonus$coef
+  # obj_dml_plr_bonus$se
+  
   res <- data.frame(
-	estimator = c("CATE_m0","CATE_m1","CATE_m0_grf","CATE_m1_grf","CATE_m1_tmle","CATE_m1_tmle"),
+	estimator = c("CATE_m0","CATE_m1",
+	              "CATE_m0_grf","CATE_m1_grf",
+	              "CATE_m0_tmle_ranger","CATE_m1_tmle_ranger",
+	              "CATE_m0_tmle_xgboost","CATE_m1_tmle_xgboost",
+	              "CATE_m0_tmle_tree","CATE_m1_tmle_tree",
+	              "CATE_m0_tmle_stacked","CATE_m1_tmle_stacked"),
     rbind(
       ate_m0,
       ate_m1,
       ate_m0_grf,
       ate_m1_grf,
-      ate_m0_tmle,
-      ate_m1_tmle
+      ate_m0_tmle_ranger,
+      ate_m1_tmle_ranger,
+      ate_m0_tmle_xgboost,
+      ate_m1_tmle_xgboost,
+      ate_m0_tmle_tree,
+      ate_m1_tmle_tree,
+      ate_m0_tmle_stacked,
+      ate_m1_tmle_stacked
     ) 
   )
   
