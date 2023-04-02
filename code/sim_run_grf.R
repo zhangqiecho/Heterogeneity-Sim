@@ -76,7 +76,11 @@ cluster_sim <- function(nsim, sample_size){
   m    <- rbinom(n,1,pi_m)
   
   # OUTCOME MODEL: EXPOSURE VALUE UNDER M == 0 IS 7.5; VALUE UNDER M = 1 IS -7.5
-  y <- 80 + 7.5*x + 7.5*m - 15*x*m + rnorm(length(x),0,10)
+  mu_y10 <- expit(-log((1/.2)-1) - log(7.5)*pi_x - log(7.5)*pi_m + log(15)*pi_x*pi_m 
+                + log(7.5)*x + log(7.5)*m - log(15)*x*m)
+  mean(mu_y)
+
+  y <- rbinom(n, 1, mu_y)  
 
   dat <- data.frame(y,m,c,x)
   names(dat) <- c("y","m",paste0("c",1:5),"x")
@@ -88,9 +92,11 @@ cluster_sim <- function(nsim, sample_size){
   c_matrix1 <- c(0,1,0,0,0,0,0,0,0) # ATE among m = 0
   c_matrix2 <- c(0,1,0,0,0,0,0,0,1) # ATE among m = 1; NB: r puts interaction coefficient at end
   
-  ate_m0 <- c(coef(mod_true) %*% c_matrix1, sqrt(t(c_matrix1) %*% vcov(mod_true) %*% c_matrix1))
+  ate_m0 <- c(coef(mod_true) %*% c_matrix1, 
+              sqrt(t(c_matrix1) %*% vcov(mod_true) %*% c_matrix1))
   
-  ate_m1 <- c(coef(mod_true) %*% c_matrix2, sqrt(t(c_matrix2) %*% vcov(mod_true) %*% c_matrix2))
+  ate_m1 <- c(coef(mod_true) %*% c_matrix2, 
+              sqrt(t(c_matrix2) %*% vcov(mod_true) %*% c_matrix2))
   
   # Qi: here are your tasks
   ## Ultimate goal: get one mean difference for M = 0, and one for M = 1
@@ -242,9 +248,22 @@ cluster_sim <- function(nsim, sample_size){
   
   # RUN TMLE3 
   set.seed(123)
-  tmle0_list[[i]] <- tmle3(ate_spec, subset(dat, m==0, select = -m), nodes_, learner_list)
-  tmle1_list[[i]] <- tmle3(ate_spec, subset(dat, m==1, select = -m), nodes_, learner_list)
+  tmle0_list[[i]] <- tmle3(ate_spec, 
+                           subset(dat, m==0, select = -m), 
+                           nodes_, 
+                           learner_list)
+  tmle1_list[[i]] <- tmle3(ate_spec, 
+                           subset(dat, m==1, select = -m), 
+                           nodes_, 
+                           learner_list)
 
+  # aipw0_list[[i]] <- AIPW$new(A=dat[dat$m==0,]$x,
+  #                             Y=as.numeric(dat[dat$m==0,]$y>82),
+  #                             W=subset(dat, m==0, select = c("c1","c2","c3","c4","c5")),
+  #                             Q.SL.library = learner_list$Y,
+  #                             g.SL.library = learner_list$A,
+  #                             verbose = TRUE)$fit()$summary()
+  
   }
   
   ate_m0_tmle_ranger <- cbind(tmle0_list[[3]]$estimates[[1]]$psi, 
