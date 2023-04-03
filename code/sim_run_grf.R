@@ -10,9 +10,9 @@ userLib <-  "~/R/R_LIBS_USER"
 
 packages <- c("data.table","tidyverse","skimr",
               "here","mvtnorm","latex2exp","earth",
-              "readxl","VGAM", "ranger","xgboost",
+              "readxl", "ranger","xgboost",
               "mgcv","glmnet","NbClust","factoextra",
-              "SuperLearner", "AIPW", "dplyr", "cluster", 
+              "dplyr", "cluster", 
               "ggplot2", "estimatr","grf", "DoubleML",
               "mlr3","mlr3learners","mlr3pipelines")
 
@@ -34,7 +34,7 @@ library(sl3)
 remotes::install_github('yqzhong7/AIPW')
 library(AIPW)
 
-args = c(5,1000)
+args = c(2,1000)
 
 # CREATE EXPIT AND LOGIT FUNCTIONS
 expit <- function(x){ exp(x)/(1+exp(x)) }
@@ -46,7 +46,13 @@ sample_size <- as.numeric(args[2])
 cat(paste("Sample Size for Each Sim:", sample_size), "\n")
 
 ## FUNCTION
-cluster_sim <- function(nsim, sample_size){
+
+param1 = -4
+param2 = 4
+cluster_sim <- function(nsim, sample_size, param1, param2){
+  
+  param1 <- exp(param1)
+  param2 <- exp(param2)
   
   n = sample_size
   p = 5
@@ -76,11 +82,10 @@ cluster_sim <- function(nsim, sample_size){
   m    <- rbinom(n,1,pi_m)
   
   # OUTCOME MODEL: EXPOSURE VALUE UNDER M == 0 IS 7.5; VALUE UNDER M = 1 IS -7.5
-  mu_y10 <- expit(-log((1/.2)-1) - log(7.5)*pi_x - log(7.5)*pi_m + log(15)*pi_x*pi_m 
-                + log(7.5)*x + log(7.5)*m - log(15)*x*m)
-  mean(mu_y)
-
-  y <- rbinom(n, 1, mu_y)  
+  mu_y <- expit(-log((1/.2)-1) - log(param1)*pi_x - log(7.5)*pi_m + 
+                  log(param2)*pi_x*pi_m + log(param1)*x+ log(7.5)*m - log(param2)*x*m)
+  
+  y <- rbinom(n, 1, mu_y)
 
   dat <- data.frame(y,m,c,x)
   names(dat) <- c("y","m",paste0("c",1:5),"x")
@@ -150,10 +155,7 @@ cluster_sim <- function(nsim, sample_size){
   ate_m1_grf <- average_treatment_effect(cf, subset = m == 1) # ate = -6.8 when m = 1
   ate_m0_grf <- average_treatment_effect(cf, subset = m == 0) # ate = 7.7 when m = 0
   
-  # TMLE
-  
-  sl3_list_learners("continuous") 
-  
+  # TMLE & AIPW
   lrnr_mean <- make_learner(Lrnr_mean)
   lrnr_glm <- make_learner(Lrnr_glm)
   
@@ -226,8 +228,8 @@ cluster_sim <- function(nsim, sample_size){
   # We only need one, because they're the same
   
   learners_ <- c(sl_ranger, sl_xgboost, sl_tree, sl_)
-  
   tmle0_list <- tmle1_list <- aipw0_list <- aipw1_list <- list()
+
   for (i in 1:length(learners_)){
     
   Q_learner <- Lrnr_sl$new(learners = learners_[i], 
@@ -240,7 +242,7 @@ cluster_sim <- function(nsim, sample_size){
   ######################################################################
   
   # PREPARE THE THINGS WE WANT TO FEED IN TO TMLE3
-  ate_spec <- tmle_ATE(treatment_level = 1, control_level = 0)
+  ate_spec <- tmle_OR(contrast_level = 1, baseline_level = 0)
   
   nodes_ <- list(W = c("c1", "c2", "c3", "c4", "c5"), 
                  A = "x", 
@@ -257,39 +259,64 @@ cluster_sim <- function(nsim, sample_size){
                            nodes_, 
                            learner_list)
 
-  # aipw0_list[[i]] <- AIPW$new(A=dat[dat$m==0,]$x,
-  #                             Y=as.numeric(dat[dat$m==0,]$y>82),
-  #                             W=subset(dat, m==0, select = c("c1","c2","c3","c4","c5")),
-  #                             Q.SL.library = learner_list$Y,
-  #                             g.SL.library = learner_list$A,
-  #                             verbose = TRUE)$fit()$summary()
+  aipw0_list[[i]] <- AIPW_tmle$new(A=dat[dat$m==0,]$x,
+                                   Y=dat[dat$m==0,]$y,
+                                   #W=subset(dat, m==0, select = c("c1","c2","c3","c4","c5")),
+                                   # Q.SL.library = learner_list$Y,
+                                   # g.SL.library = learner_list$A,
+                                   tmle_fit = tmle0_list[[i]],
+                                   verbose = F)$summary()
+  
+  aipw1_list[[i]] <- AIPW$new(A=dat[dat$m==1,]$x,
+                              Y=dat[dat$m==1,]$y,
+                              W=subset(dat, m==1, select = c("c1","c2","c3","c4","c5")),
+                              Q.SL.library = learner_list$Y,
+                              g.SL.library = learner_list$A,
+                              verbose = TRUE)$fit()$summary()
   
   }
   
-  ate_m0_tmle_ranger <- cbind(tmle0_list[[3]]$estimates[[1]]$psi, 
-                              sqrt(var(tmle0_list[[1]]$estimates[[1]]$IC)/sum(1-m)))
+  ate_m0_tmle_ranger <- cbind(tmle0_list[[1]]$estimates[[2]]$psi - tmle0_list[[1]]$estimates[[1]]$psi, 
+                              sqrt(var(tmle0_list[[1]]$estimates[[2]]$IC - tmle0_list[[1]]$estimates[[1]]$IC)/sum(1-m)))
   
-  ate_m1_tmle_ranger <- cbind(tmle1_list[[1]]$estimates[[1]]$psi, 
-                              sqrt(var(tmle1_list[[1]]$estimates[[1]]$IC)/sum(m)))
+  ate_m1_tmle_ranger <- cbind(tmle1_list[[1]]$estimates[[2]]$psi - tmle1_list[[1]]$estimates[[1]]$psi, 
+                              sqrt(var(tmle1_list[[1]]$estimates[[2]]$IC - tmle1_list[[1]]$estimates[[1]]$IC)/sum(1-m)))
 
   
-  ate_m0_tmle_xgboost <- cbind(tmle0_list[[2]]$estimates[[1]]$psi, 
-                              sqrt(var(tmle0_list[[2]]$estimates[[1]]$IC)/sum(1-m)))
+  ate_m0_tmle_xgboost <- cbind(tmle0_list[[2]]$estimates[[2]]$psi - tmle0_list[[2]]$estimates[[1]]$psi, 
+                               sqrt(var(tmle0_list[[2]]$estimates[[2]]$IC - tmle0_list[[2]]$estimates[[1]]$IC)/sum(1-m)))
   
-  ate_m1_tmle_xgboost <- cbind(tmle1_list[[2]]$estimates[[1]]$psi, 
-                              sqrt(var(tmle1_list[[2]]$estimates[[1]]$IC)/sum(m)))
+  ate_m1_tmle_xgboost <- cbind(tmle1_list[[2]]$estimates[[2]]$psi - tmle1_list[[2]]$estimates[[1]]$psi, 
+                               sqrt(var(tmle1_list[[2]]$estimates[[2]]$IC - tmle1_list[[2]]$estimates[[1]]$IC)/sum(1-m)))
   
-  ate_m0_tmle_tree <- cbind(tmle0_list[[3]]$estimates[[1]]$psi, 
-                               sqrt(var(tmle0_list[[3]]$estimates[[1]]$IC)/sum(1-m)))
+  ate_m0_tmle_tree <- cbind(tmle0_list[[3]]$estimates[[2]]$psi - tmle0_list[[3]]$estimates[[1]]$psi, 
+                            sqrt(var(tmle0_list[[3]]$estimates[[2]]$IC - tmle0_list[[3]]$estimates[[1]]$IC)/sum(1-m)))
   
-  ate_m1_tmle_tree <- cbind(tmle1_list[[3]]$estimates[[1]]$psi, 
-                               sqrt(var(tmle1_list[[3]]$estimates[[1]]$IC)/sum(m)))
+  ate_m1_tmle_tree <- cbind(tmle1_list[[3]]$estimates[[2]]$psi - tmle1_list[[3]]$estimates[[1]]$psi, 
+                            sqrt(var(tmle1_list[[3]]$estimates[[2]]$IC - tmle1_list[[3]]$estimates[[1]]$IC)/sum(1-m)))
   
-  ate_m0_tmle_stacked <- cbind(tmle0_list[[4]]$estimates[[1]]$psi, 
-                            sqrt(var(tmle0_list[[4]]$estimates[[1]]$IC)/sum(1-m)))
+  ate_m0_tmle_stacked <- cbind(tmle0_list[[4]]$estimates[[2]]$psi - tmle0_list[[4]]$estimates[[1]]$psi, 
+                               sqrt(var(tmle0_list[[4]]$estimates[[2]]$IC - tmle0_list[[4]]$estimates[[1]]$IC)/sum(1-m)))
   
-  ate_m1_tmle_stacked <- cbind(tmle1_list[[4]]$estimates[[1]]$psi, 
-                            sqrt(var(tmle1_list[[4]]$estimates[[1]]$IC)/sum(m)))
+  ate_m1_tmle_stacked <- cbind(tmle1_list[[4]]$estimates[[2]]$psi - tmle1_list[[4]]$estimates[[1]]$psi, 
+                               sqrt(var(tmle1_list[[4]]$estimates[[2]]$IC - tmle1_list[[4]]$estimates[[1]]$IC)/sum(1-m)))
+  
+  
+  ate_m0_aipw_ranger <- aipw0_list[[1]]$result["Risk Difference",1:2]
+  
+  ate_m1_aipw_ranger <- aipw1_list[[1]]$result["Risk Difference",1:2]
+  
+  ate_m0_aipw_xgboost <- aipw0_list[[2]]$result["Risk Difference",1:2]
+  
+  ate_m1_aipw_xgboost <- aipw1_list[[2]]$result["Risk Difference",1:2]
+  
+  ate_m0_aipw_tree <- aipw0_list[[3]]$result["Risk Difference",1:2]
+    
+  ate_m1_aipw_tree <- aipw0_list[[3]]$result["Risk Difference",1:2]
+    
+  ate_m0_aipw_stacked <- aipw0_list[[4]]$result["Risk Difference",1:2]
+  
+  ate_m1_aipw_stacked <- aipw0_list[[4]]$result["Risk Difference",1:2]
   
   #Double Debiased ML
   # dml0_data = DoubleMLData$new(subset(dat, m==0, select= -m),
@@ -329,12 +356,16 @@ cluster_sim <- function(nsim, sample_size){
   # obj_dml_plr_bonus$se
   
   res <- data.frame(
-	estimator = c("CATE_m0","CATE_m1",
+	estimator = c("CATE_m0_glm","CATE_m1_glm",
 	              "CATE_m0_grf","CATE_m1_grf",
 	              "CATE_m0_tmle_ranger","CATE_m1_tmle_ranger",
 	              "CATE_m0_tmle_xgboost","CATE_m1_tmle_xgboost",
 	              "CATE_m0_tmle_tree","CATE_m1_tmle_tree",
-	              "CATE_m0_tmle_stacked","CATE_m1_tmle_stacked"),
+	              "CATE_m0_tmle_stacked","CATE_m1_tmle_stacked",
+	              "CATE_m0_aipw_ranger", "CATE_m1_aipw_ranger",
+	              "CATE_m0_aipw_xgboost","CATE_m1_aipw_xgboost",
+	              "CATE_m0_aipw_tree",   "CATE_m1_aipw_tree",
+	              "CATE_m0_aipw_stacked","CATE_m1_aipw_stacked"),
     rbind(
       ate_m0,
       ate_m1,
@@ -347,8 +378,18 @@ cluster_sim <- function(nsim, sample_size){
       ate_m0_tmle_tree,
       ate_m1_tmle_tree,
       ate_m0_tmle_stacked,
-      ate_m1_tmle_stacked
-    ) 
+      ate_m1_tmle_stacked,
+      ate_m0_aipw_ranger,
+      ate_m1_aipw_ranger,
+      ate_m0_aipw_xgboost,
+      ate_m1_aipw_xgboost,
+      ate_m0_aipw_tree,
+      ate_m1_aipw_tree,
+      ate_m0_aipw_stacked,
+      ate_m1_aipw_stacked
+    ),
+	parameter1 = param1, 
+	parameter2 = param2
   )
   
   return(res)
@@ -358,9 +399,14 @@ cluster_sim <- function(nsim, sample_size){
 system.time(
   results <- lapply(
     1:number_sims, 
-    function(x) cluster_sim(nsim=x,sample_size=sample_size)
+    function(x) cluster_sim(nsim=x,
+                            sample_size=sample_size, 
+                            param1 = log(param1), 
+                            param2 = log(param2))
     )
   )
 results <- do.call(rbind, results)
+
+row.names(results) <- NULL
 
 write_csv(results, file = here("data","simulation_results-phase1.csv"))
