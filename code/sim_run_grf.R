@@ -34,7 +34,7 @@ library(sl3)
 remotes::install_github('yqzhong7/AIPW')
 library(AIPW)
 
-args = c(2,1000)
+#args = c(2,1000)
 
 # CREATE EXPIT AND LOGIT FUNCTIONS
 expit <- function(x){ exp(x)/(1+exp(x)) }
@@ -47,10 +47,8 @@ cat(paste("Sample Size for Each Sim:", sample_size), "\n")
 
 ## FUNCTION
 
-param1 = -4
-param2 = 4
 cluster_sim <- function(nsim, sample_size, param1, param2){
-  
+
   param1 <- exp(param1)
   param2 <- exp(param2)
   
@@ -391,22 +389,36 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
 	parameter1 = param1, 
 	parameter2 = param2
   )
-  
+
   return(res)
-}                                                                               
+  
+}                                                  
+
 
 ### RUNNING THE FUNCTION
-system.time(
-  results <- lapply(
-    1:number_sims, 
-    function(x) cluster_sim(nsim=x,
-                            sample_size=sample_size, 
-                            param1 = log(param1), 
-                            param2 = log(param2))
-    )
-  )
-results <- do.call(rbind, results)
-
-row.names(results) <- NULL
+phi <- c(-4:4)
+phi2 <- c(-6:6)
+final <- data.frame()
+for (i in seq_along(phi)) {
+  for (j in seq_along(phi2)) {
+    
+    system.time(results <- lapply(1:number_sims, 
+                                  function(x) cluster_sim(nsim=x,
+                                                          sample_size=sample_size, 
+                                                          param1 = phi[i], 
+                                                          param2 = phi2[j])
+                                  )
+                )
+    
+    results <- as.data.frame(cbind(param1 = phi[i], 
+                                   param2 = phi2[j], 
+                                   do.call(rbind, results))
+                             )
+    
+    rownames(results)<- NULL
+    
+    final <- rbind(final, results)
+  }
+}
 
 write_csv(results, file = here("data","simulation_results-phase1.csv"))
