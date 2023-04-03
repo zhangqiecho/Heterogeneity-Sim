@@ -150,8 +150,8 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
     tune.parameters = "all"
     )
   
-  ate_m1_grf <- average_treatment_effect(cf, subset = m == 1) # ate = -6.8 when m = 1
-  ate_m0_grf <- average_treatment_effect(cf, subset = m == 0) # ate = 7.7 when m = 0
+  ate_m1_grf <- average_treatment_effect(cf, subset = m == 1) 
+  ate_m0_grf <- average_treatment_effect(cf, subset = m == 0) 
   
   # TMLE & AIPW
   lrnr_mean <- make_learner(Lrnr_mean)
@@ -316,33 +316,49 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
   
   ate_m1_aipw_stacked <- aipw0_list[[4]]$result["Risk Difference",1:2]
   
-  #Double Debiased ML
+  # #Double Debiased ML
   # dml0_data = DoubleMLData$new(subset(dat, m==0, select= -m),
   #                              y_col = "y",
   #                              d_cols = "x",
   #                              x_cols = c("c1","c2","c3","c4","c5"))
   # 
-  # lrn_ranger = lrn("regr.ranger",
-  #                  num.trees = c(250, 1000),
-  #                  mtry = c(3,4),
-  #                  min.node.size = c(50,100))
-  # lrn_ranger = lrn("regr.ranger",
-  #                  num.trees = c(250, 1000),
-  #                  mtry = c(3,4),
-  #                  min.node.size = c(50,100))
+  # dml1_data = DoubleMLData$new(subset(dat, m==1, select= -m),
+  #                              y_col = "y",
+  #                              d_cols = "x",
+  #                              x_cols = c("c1","c2","c3","c4","c5"))
   # 
-  # lrn_xgboost = lrn("regr.xgboost",
-  #                  nrounds = 500,
-  #                  max.depth = 5,
-  #                  min.node.size = 2)
   # 
-  # ml_l_bonus = learner$clone()
-  # ml_m_bonus = learner$clone()
+  # base_learners <- list(
+  #   lrn("classif.xgboost", predict_type = "prob", max_depth = 4, eta = 0.05, nrounds = 100),
+  #   lrn("classif.xgboost", predict_type = "prob", max_depth = 6, eta = 0.1, nrounds = 200),
+  #   lrn("classif.xgboost", predict_type = "prob", max_depth = 8, eta = 0.2, nrounds = 300)
+  # )
+  # 
+  # names(base_learners[[3]])
+  # 
+  # base_learners[[3]]$id
+  # 
+  # for (i in 1:length(base_learners)){
+  #   base_learners[[i]]$id <- paste0(base_learners[[i]]$id,i)
+  # }
+  
+  # Train the base learners
+  # base_learner_fits <- lapply(base_learners, function(l) train(l, task))
+  
+  # Create the Super Learner metalearner
+  # metalearner <- lrn("classif.log_reg")
+  # 
+  # # Create the Super Learner algorithm
+  # sl_algorithm <- pipeline_stacking(base_learners, metalearner)
+  # graph_learner = as_learner(sl_algorithm)
+  # 
+  # # Fit the Super Learner algorithm
+  # sl_fit <- train(sl_algorithm, task)
   # 
   # set.seed(123)
-  # obj_dml_plr_bonus = DoubleMLPLR$new(dml_data_bonus, 
-  #                                     ml_l = ml_l_bonus, 
-  #                                     ml_m = ml_m_bonus,
+  # obj_dml_plr_bonus = DoubleMLPLR$new(dml0_data,
+  #                                     ml_l = sl_algorithm,
+  #                                     ml_m = sl_algorithm,
   #                                     n_folds = 10,
   #                                     n_rep = 1,
   #                                     score = "partialling out",
