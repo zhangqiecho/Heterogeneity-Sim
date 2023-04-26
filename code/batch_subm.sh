@@ -6,6 +6,7 @@
 #SBATCH --mem=120g
 #SBATCH --partition=naimi
 #SBATCH --mail-type=ALL
+#SBATCH --mail-user=anaimi@emory.edu
 
 module purge
 module load R
