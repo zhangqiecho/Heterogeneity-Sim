@@ -4,6 +4,8 @@ args = commandArgs(trailingOnly=TRUE)
 ## NOTE: We can run this program locally from the command line, and thus leave the package 
 ## installation as is. Once we run on cluster, need to change library location.
 
+start.time <- Sys.time()
+
 ## where is the library?
 userLib <-  "~/R/R_LIBS_USER"
 .libPaths(userLib)
@@ -46,7 +48,6 @@ sample_size <- as.numeric(args[2])
 cat(paste("Sample Size for Each Sim:", sample_size), "\n")
 
 ## FUNCTION
-
 cluster_sim <- function(nsim, sample_size, param1, param2){
 
   param1 <- exp(param1)
@@ -55,6 +56,7 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
   n = sample_size
   p = 5
   set.seed(nsim)
+  print(nsim)
   
   ## CONFOUNDERS
   sigma <- matrix(0,nrow=p,ncol=p); diag(sigma) <- 1
@@ -154,6 +156,9 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
   ate_m0_grf <- average_treatment_effect(cf, subset = m == 0) 
   
   # TMLE & AIPW
+  
+  print(paste("Constructing learners for TMLE & AIPW ... "))
+  
   lrnr_mean <- make_learner(Lrnr_mean)
   lrnr_glm <- make_learner(Lrnr_glm)
   
@@ -247,6 +252,7 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
                  Y = "y")
   
   # RUN TMLE3 
+  print(paste("TMLE Version",i))
   set.seed(123)
   tmle0_list[[i]] <- tmle3(ate_spec, 
                            subset(dat, m==0, select = -m), 
@@ -257,20 +263,16 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
                            nodes_, 
                            learner_list)
 
+  print(paste("AIPW Version",i))
   aipw0_list[[i]] <- AIPW_tmle$new(A=dat[dat$m==0,]$x,
                                    Y=dat[dat$m==0,]$y,
-                                   #W=subset(dat, m==0, select = c("c1","c2","c3","c4","c5")),
-                                   # Q.SL.library = learner_list$Y,
-                                   # g.SL.library = learner_list$A,
                                    tmle_fit = tmle0_list[[i]],
-                                   verbose = F)$summary()
+                                   verbose = T)$summary()
   
-  aipw1_list[[i]] <- AIPW$new(A=dat[dat$m==1,]$x,
-                              Y=dat[dat$m==1,]$y,
-                              W=subset(dat, m==1, select = c("c1","c2","c3","c4","c5")),
-                              Q.SL.library = learner_list$Y,
-                              g.SL.library = learner_list$A,
-                              verbose = TRUE)$fit()$summary()
+  aipw1_list[[i]] <- AIPW_tmle$new(A=dat[dat$m==1,]$x,
+                                   Y=dat[dat$m==1,]$y,
+                                   tmle_fit = tmle1_list[[i]],
+                                   verbose = TRUE)$summary()
   
   }
   
@@ -280,7 +282,6 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
   ate_m1_tmle_ranger <- cbind(tmle1_list[[1]]$estimates[[2]]$psi - tmle1_list[[1]]$estimates[[1]]$psi, 
                               sqrt(var(tmle1_list[[1]]$estimates[[2]]$IC - tmle1_list[[1]]$estimates[[1]]$IC)/sum(1-m)))
 
-  
   ate_m0_tmle_xgboost <- cbind(tmle0_list[[2]]$estimates[[2]]$psi - tmle0_list[[2]]$estimates[[1]]$psi, 
                                sqrt(var(tmle0_list[[2]]$estimates[[2]]$IC - tmle0_list[[2]]$estimates[[1]]$IC)/sum(1-m)))
   
@@ -316,58 +317,7 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
   
   ate_m1_aipw_stacked <- aipw0_list[[4]]$result["Risk Difference",1:2]
   
-  # #Double Debiased ML
-  # dml0_data = DoubleMLData$new(subset(dat, m==0, select= -m),
-  #                              y_col = "y",
-  #                              d_cols = "x",
-  #                              x_cols = c("c1","c2","c3","c4","c5"))
-  # 
-  # dml1_data = DoubleMLData$new(subset(dat, m==1, select= -m),
-  #                              y_col = "y",
-  #                              d_cols = "x",
-  #                              x_cols = c("c1","c2","c3","c4","c5"))
-  # 
-  # 
-  # base_learners <- list(
-  #   lrn("classif.xgboost", predict_type = "prob", max_depth = 4, eta = 0.05, nrounds = 100),
-  #   lrn("classif.xgboost", predict_type = "prob", max_depth = 6, eta = 0.1, nrounds = 200),
-  #   lrn("classif.xgboost", predict_type = "prob", max_depth = 8, eta = 0.2, nrounds = 300)
-  # )
-  # 
-  # names(base_learners[[3]])
-  # 
-  # base_learners[[3]]$id
-  # 
-  # for (i in 1:length(base_learners)){
-  #   base_learners[[i]]$id <- paste0(base_learners[[i]]$id,i)
-  # }
-  
-  # Train the base learners
-  # base_learner_fits <- lapply(base_learners, function(l) train(l, task))
-  
-  # Create the Super Learner metalearner
-  # metalearner <- lrn("classif.log_reg")
-  # 
-  # # Create the Super Learner algorithm
-  # sl_algorithm <- pipeline_stacking(base_learners, metalearner)
-  # graph_learner = as_learner(sl_algorithm)
-  # 
-  # # Fit the Super Learner algorithm
-  # sl_fit <- train(sl_algorithm, task)
-  # 
-  # set.seed(123)
-  # obj_dml_plr_bonus = DoubleMLPLR$new(dml0_data,
-  #                                     ml_l = sl_algorithm,
-  #                                     ml_m = sl_algorithm,
-  #                                     n_folds = 10,
-  #                                     n_rep = 1,
-  #                                     score = "partialling out",
-  #                                     dml_procedure = "dml2",
-  #                                     draw_sample_splitting = TRUE,
-  #                                     apply_cross_fitting = TRUE)
-  # obj_dml_plr_bonus$fit()
-  # obj_dml_plr_bonus$coef
-  # obj_dml_plr_bonus$se
+  print(paste("Creating res object ... "))
   
   res <- data.frame(
 	estimator = c("CATE_m0_glm","CATE_m1_glm",
@@ -381,39 +331,33 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
 	              "CATE_m0_aipw_tree",   "CATE_m1_aipw_tree",
 	              "CATE_m0_aipw_stacked","CATE_m1_aipw_stacked"),
     rbind(
-      ate_m0,
-      ate_m1,
-      ate_m0_grf,
-      ate_m1_grf,
-      ate_m0_tmle_ranger,
-      ate_m1_tmle_ranger,
-      ate_m0_tmle_xgboost,
-      ate_m1_tmle_xgboost,
-      ate_m0_tmle_tree,
-      ate_m1_tmle_tree,
-      ate_m0_tmle_stacked,
-      ate_m1_tmle_stacked,
-      ate_m0_aipw_ranger,
-      ate_m1_aipw_ranger,
-      ate_m0_aipw_xgboost,
-      ate_m1_aipw_xgboost,
-      ate_m0_aipw_tree,
-      ate_m1_aipw_tree,
-      ate_m0_aipw_stacked,
-      ate_m1_aipw_stacked
+      ate_m0,ate_m1,
+      ate_m0_grf,ate_m1_grf,
+      ate_m0_tmle_ranger,ate_m1_tmle_ranger,
+      ate_m0_tmle_xgboost,ate_m1_tmle_xgboost,
+      ate_m0_tmle_tree,ate_m1_tmle_tree,
+      ate_m0_tmle_stacked,ate_m1_tmle_stacked,
+      ate_m0_aipw_ranger,ate_m1_aipw_ranger,
+      ate_m0_aipw_xgboost,ate_m1_aipw_xgboost,
+      ate_m0_aipw_tree,ate_m1_aipw_tree,
+      ate_m0_aipw_stacked,ate_m1_aipw_stacked
     ),
 	parameter1 = param1, 
-	parameter2 = param2
+	parameter2 = param2,
+	simulation_number = nsim
   )
 
-  return(res)
+  print(paste("Writing to file ... "))
   
-}                                                  
-
+  write_csv(res, file = here("data","simulation_results-phase1.csv"), append = T)
+  
+  print(paste(nsim, "end"))
+  return(res)
+}                                  
 
 ### RUNNING THE FUNCTION
-phi <- c(-4:4)
-phi2 <- c(-6:6)
+phi <- seq(-4,4,by=2)
+phi2 <- seq(-6,6,by=2)
 final <- data.frame()
 for (i in seq_along(phi)) {
   for (j in seq_along(phi2)) {
@@ -431,10 +375,17 @@ for (i in seq_along(phi)) {
                                    do.call(rbind, results))
                              )
     
-    rownames(results)<- NULL
-    
-    final <- rbind(final, results)
+    rownames(results) <- NULL
   }
 }
 
-write_csv(results, file = here("data","simulation_results-phase1.csv"))
+write_rds(results, file = here("data","simulation_results-phase1.csv"))
+
+end.time <- Sys.time()
+
+duration_time <- end.time - start.time
+
+dur_dat <- data.frame(run_time = duration_time,
+                      number_sims = nsim)
+
+write_csv(dur_dat, file = here("data", "run_time.csv"))

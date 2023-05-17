@@ -15,8 +15,10 @@ expit <- function(x){ exp(x)/(1+exp(x)) }
 logit <- function(x){ log(x/(1-x)) }
 
 true_m0 <- true_m1 <- NULL
-for(param1 in -4:4){
-  for(param2 in -6:6){
+seq1 <- seq(-4,4,by=2)
+seq2 <- seq(-6,6,by=2)
+for(param1 in seq1){
+  for(param2 in seq2){
     cluster_sim <- function(){
     
     # param1 = -4; param2 = -4
