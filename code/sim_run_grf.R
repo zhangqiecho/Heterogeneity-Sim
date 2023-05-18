@@ -36,7 +36,7 @@ library(sl3)
 remotes::install_github('yqzhong7/AIPW')
 library(AIPW)
 
-args = c(2,1000)
+#args = c(2,1000)
 
 # CREATE EXPIT AND LOGIT FUNCTIONS
 expit <- function(x){ exp(x)/(1+exp(x)) }
@@ -349,7 +349,7 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
 
   print(paste("Writing to file ... "))
   
-  write_csv(res, file = here("data","simulation_results-phase1.csv"), append = T)
+  write_csv(res, file = here("data",paste("simulation_results_",nsim,".csv")), append = T)
   
   print(paste("simulation", nsim, "end"))
   return(res)
@@ -399,7 +399,7 @@ par_res <- do.call(rbind, par_res)
 rownames(par_res) <- NULL
 
 write_rds(par_res, 
-          file = here("data","simulation_results-phase1.rds")
+          file = here("data",paste("simulation_results_",number_sims,".rds"))
           )
 
 end.time <- Sys.time()
@@ -407,6 +407,6 @@ end.time <- Sys.time()
 duration_time <- end.time - start.time
 
 dur_dat <- data.frame(run_time = duration_time,
-                      number_sims = nsim)
+                      number_sims = number_sims)
 
 write_csv(dur_dat, file = here("data", paste0("run_time_",number_sims,".csv")))
