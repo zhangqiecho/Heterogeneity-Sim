@@ -12,4 +12,8 @@ module purge
 module load R
 
 # Simulation Run Script
-Rscript --no-save --no-restore --verbose /home/anaimi/Heterogeneity-Sim/code/sim_run_grf.R 10000 1000  > /home/anaimi/Heterogeneity-Sim/misc/sim_run_grf.Rout 2>&1
+Rscript --no-save --no-restore --verbose /home/anaimi/Heterogeneity-Sim/code/sim_run_grf.R 1 1000  > /home/anaimi/Heterogeneity-Sim/misc/sim_run_grf_1.Rout 2>&1
+
+Rscript --no-save --no-restore --verbose /home/anaimi/Heterogeneity-Sim/code/sim_run_grf.R 3 1000  > /home/anaimi/Heterogeneity-Sim/misc/sim_run_grf_3.Rout 2>&1
+
+Rscript --no-save --no-restore --verbose /home/anaimi/Heterogeneity-Sim/code/sim_run_grf.R 9 1000  > /home/anaimi/Heterogeneity-Sim/misc/sim_run_grf_9.Rout 2>&1

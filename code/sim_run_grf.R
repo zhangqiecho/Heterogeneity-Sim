@@ -14,7 +14,7 @@ packages <- c("data.table","tidyverse","skimr",
               "here","mvtnorm","latex2exp","earth",
               "readxl", "ranger","xgboost",
               "mgcv","glmnet","NbClust","factoextra",
-              "dplyr", "cluster", 
+              "dplyr", "cluster", "foreach","doParallel",
               "ggplot2", "estimatr","grf", "DoubleML",
               "mlr3","mlr3learners","mlr3pipelines")
 
@@ -36,7 +36,7 @@ library(sl3)
 remotes::install_github('yqzhong7/AIPW')
 library(AIPW)
 
-#args = c(2,1000)
+args = c(2,1000)
 
 # CREATE EXPIT AND LOGIT FUNCTIONS
 expit <- function(x){ exp(x)/(1+exp(x)) }
@@ -56,7 +56,7 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
   n = sample_size
   p = 5
   set.seed(nsim)
-  print(nsim)
+  print(paste("simulation number",nsim))
   
   ## CONFOUNDERS
   sigma <- matrix(0,nrow=p,ncol=p); diag(sigma) <- 1
@@ -351,35 +351,56 @@ cluster_sim <- function(nsim, sample_size, param1, param2){
   
   write_csv(res, file = here("data","simulation_results-phase1.csv"), append = T)
   
-  print(paste(nsim, "end"))
+  print(paste("simulation", nsim, "end"))
   return(res)
 }                                  
 
 ### RUNNING THE FUNCTION
-phi <- seq(-4,4,by=2)
-phi2 <- seq(-6,6,by=2)
-final <- data.frame()
-for (i in seq_along(phi)) {
-  for (j in seq_along(phi2)) {
-    
-    system.time(results <- lapply(1:number_sims, 
-                                  function(x) cluster_sim(nsim=x,
-                                                          sample_size=sample_size, 
-                                                          param1 = phi[i], 
-                                                          param2 = phi2[j])
-                                  )
-                )
-    
-    results <- as.data.frame(cbind(param1 = phi[i], 
-                                   param2 = phi2[j], 
-                                   do.call(rbind, results))
+phi_dat <- list(phi = seq(-4,4,by=2), 
+                phi2 = seq(-6,6,by=2))
+
+data_grid <- expand.grid(phi_dat, KEEP.OUT.ATTRS = FALSE)
+
+parallel::detectCores()
+
+n.cores <- parallel::detectCores()
+
+my.cluster <- parallel::makeCluster(
+  n.cores, 
+  type = "FORK"
+)
+
+print(my.cluster)
+
+doParallel::registerDoParallel(cl = my.cluster)
+
+foreach::getDoParRegistered()
+
+par_res <- foreach(i = 1:nrow(data_grid)) %dopar% {
+#par_res <- foreach(i = 1:n.cores) %dopar% {
+  
+  print(paste("for loop iteration",i))
+  
+  results <- do.call(rbind,
+                      lapply(1:number_sims, 
+                                function(x) cluster_sim(nsim=x,
+                                                        sample_size=sample_size, 
+                                                        param1 = data_grid[i,]$phi, 
+                                                        param2 = data_grid[i,]$phi2)
                              )
-    
-    rownames(results) <- NULL
-  }
+                      )
+  
 }
 
-write_rds(results, file = here("data","simulation_results-phase1.csv"))
+parallel::stopCluster(cl = my.cluster)
+
+par_res <- do.call(rbind, par_res)
+
+rownames(par_res) <- NULL
+
+write_rds(par_res, 
+          file = here("data","simulation_results-phase1.rds")
+          )
 
 end.time <- Sys.time()
 
@@ -388,4 +409,4 @@ duration_time <- end.time - start.time
 dur_dat <- data.frame(run_time = duration_time,
                       number_sims = nsim)
 
-write_csv(dur_dat, file = here("data", "run_time.csv"))
+write_csv(dur_dat, file = here("data", paste0("run_time_",number_sims,".csv")))
