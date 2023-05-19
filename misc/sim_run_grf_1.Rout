@@ -1,0 +1,67 @@
+running
+  '/apps/R-4.0.2/lib64/R/bin/R --no-echo --no-restore --no-save --no-restore --file=/home/anaimi/Heterogeneity-Sim/code/sim_run_grf.R --args 1 1000'
+
+── Attaching packages ─────────────────────────────────────── tidyverse 1.3.1 ──
+✔ ggplot2 3.4.1      ✔ purrr   0.3.5 
+✔ tibble  3.1.8      ✔ dplyr   1.0.10
+✔ tidyr   1.2.1      ✔ stringr 1.4.1 
+✔ readr   2.1.0      ✔ forcats 0.5.1 
+── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::between()   masks data.table::between()
+✖ dplyr::filter()    masks stats::filter()
+✖ dplyr::first()     masks data.table::first()
+✖ dplyr::lag()       masks stats::lag()
+✖ dplyr::last()      masks data.table::last()
+✖ purrr::transpose() masks data.table::transpose()
+here() starts at /home/anaimi/Heterogeneity-Sim
+
+Attaching package: ‘xgboost’
+
+The following object is masked from ‘package:dplyr’:
+
+    slice
+
+
+Attaching package: ‘nlme’
+
+The following object is masked from ‘package:dplyr’:
+
+    collapse
+
+This is mgcv 1.8-31. For overview type 'help("mgcv-package")'.
+
+Attaching package: ‘Matrix’
+
+The following objects are masked from ‘package:tidyr’:
+
+    expand, pack, unpack
+
+Loaded glmnet 4.1-4
+Welcome! Want to learn more? See two factoextra-related books at https://goo.gl/ve3WBa
+
+Attaching package: ‘foreach’
+
+The following objects are masked from ‘package:purrr’:
+
+    accumulate, when
+
+Skipping install of 'causalTree' from a github remote, the SHA1 (48604762) has not changed since last install.
+  Use `force = TRUE` to force installation
+Loading required package: rpart
+Loading required package: rpart.plot
+Skipping install of 'tlverse' from a github remote, the SHA1 (76c0b732) has not changed since last install.
+  Use `force = TRUE` to force installation
+
+Attaching package: ‘sl3’
+
+The following object is masked from ‘package:ranger’:
+
+    importance
+
+Skipping install of 'AIPW' from a github remote, the SHA1 (3903609b) has not changed since last install.
+  Use `force = TRUE` to force installation
+Number of Simulations: 1 
+Sample Size for Each Sim: 1000 
+[1] 32
+socket cluster with 32 nodes on host ‘localhost’
+[1] TRUE
