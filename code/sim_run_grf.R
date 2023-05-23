@@ -36,7 +36,7 @@ library(sl3)
 remotes::install_github('yqzhong7/AIPW')
 library(AIPW)
 
-#args = c(2,1000)
+#args = c(2,1000, 1)
 
 # CREATE EXPIT AND LOGIT FUNCTIONS
 expit <- function(x){ exp(x)/(1+exp(x)) }
@@ -46,17 +46,21 @@ number_sims <- as.numeric(args[1])
 cat(paste("Number of Simulations:", number_sims, "\n"))
 sample_size <- as.numeric(args[2])
 cat(paste("Sample Size for Each Sim:", sample_size), "\n")
+run_loop <- as.numeric(args[3])
+cat(paste("The Loop Currently Running is:", run_loop), "\n")
 
 ## FUNCTION
-cluster_sim <- function(nsim, sample_size, param1, param2){
+cluster_sim <- function(nsim, rloop, sample_size, param1, param2){
 
   param1 <- exp(param1)
   param2 <- exp(param2)
   
   n = sample_size
   p = 5
-  set.seed(nsim)
+  set.seed(paste0(nsim,rloop))
   print(paste("simulation number",nsim))
+  print(paste("loop number",rloop))
+  print(paste("seed number",paste0(nsim,rloop)))
   
   ## CONFOUNDERS
   sigma <- matrix(0,nrow=p,ncol=p); diag(sigma) <- 1
@@ -384,6 +388,7 @@ par_res <- foreach(i = 1:nrow(data_grid)) %dopar% {
   results <- do.call(rbind,
                       lapply(1:number_sims, 
                                 function(x) cluster_sim(nsim=x,
+                                                        rloop = run_loop,
                                                         sample_size=sample_size, 
                                                         param1 = data_grid[i,]$phi, 
                                                         param2 = data_grid[i,]$phi2)
