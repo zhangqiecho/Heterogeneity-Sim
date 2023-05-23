@@ -404,7 +404,7 @@ par_res <- do.call(rbind, par_res)
 rownames(par_res) <- NULL
 
 write_rds(par_res, 
-          file = here("data",paste("simulation_results_",number_sims,".rds"))
+          file = here("data",paste0("simulation_results_",number_sims,".rds"))
           )
 
 end.time <- Sys.time()
