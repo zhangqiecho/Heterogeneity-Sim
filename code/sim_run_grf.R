@@ -414,4 +414,6 @@ duration_time <- end.time - start.time
 dur_dat <- data.frame(run_time = duration_time,
                       number_sims = number_sims)
 
-write_csv(dur_dat, file = here("data", paste0("run_time_",number_sims,".csv")))
+write_csv(dur_dat, 
+          file = here("data", 
+                      paste0("run_time_",number_sims,run_loop,".csv")))
