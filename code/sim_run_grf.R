@@ -10,13 +10,9 @@ start.time <- Sys.time()
 userLib <-  "~/R/R_LIBS_USER"
 .libPaths(userLib)
 
-packages <- c("data.table","tidyverse","skimr",
-              "here","mvtnorm","latex2exp","earth",
-              "readxl", "ranger","xgboost",
-              "mgcv","glmnet","NbClust","factoextra",
-              "dplyr", "cluster", "foreach","doParallel",
-              "ggplot2", "estimatr","grf", "DoubleML",
-              "mlr3","mlr3learners","mlr3pipelines")
+packages <- c("data.table","tidyverse","SuperLearner","boot",
+              "here","mvtnorm","foreach","doParallel","broom",
+              "ggplot2","grf", "lmtest", "sandwich")
 
 for (package in packages) {
   if (!require(package, character.only=T, quietly=T)) {
@@ -30,13 +26,6 @@ for (package in packages) {
 
 remotes::install_github('susanathey/causalTree')
 library(causalTree)
-remotes::install_github('tlverse/tlverse')
-library(tmle3)
-library(sl3)
-remotes::install_github('yqzhong7/AIPW')
-library(AIPW)
-
-#args = c(2,1000, 1)
 
 # CREATE EXPIT AND LOGIT FUNCTIONS
 expit <- function(x){ exp(x)/(1+exp(x)) }
@@ -46,328 +35,369 @@ number_sims <- as.numeric(args[1])
 cat(paste("Number of Simulations:", number_sims, "\n"))
 sample_size <- as.numeric(args[2])
 cat(paste("Sample Size for Each Sim:", sample_size), "\n")
-run_loop <- as.numeric(args[3])
-cat(paste("The Loop Currently Running is:", run_loop), "\n")
 
 ## FUNCTION
-cluster_sim <- function(nsim, rloop, sample_size, param1, param2){
+cluster_sim <- function(nsim, sample_size, param1, param2, c_number){
 
-  param1 <- exp(param1)
+  set.seed(nsim)
+  ## FOCUS ON PROBLEM OF USING CF AND DR LEARNER TO FIND THE RIGHT MODIFIER
+  ## RE-PROGRAM TO THAT P CAN BE A VARIABLE IN THE SIMS
+  ## REMOVE COMPLEXITY IN SUPER LEARNER, JUST USE THIS: sl_
+  
+  param1 <- exp(param1) # these are huge effects. need to change...
   param2 <- exp(param2)
   
   n = sample_size
-  p = 5
-  set.seed(paste0(nsim,rloop))
+  p = c_number
   print(paste("simulation number",nsim))
-  print(paste("loop number",rloop))
-  print(paste("seed number",paste0(nsim,rloop)))
   
   ## CONFOUNDERS
   sigma <- matrix(0,nrow=p,ncol=p); diag(sigma) <- 1
-  c     <- rmvnorm(n, mean=rep(0,p), sigma=sigma)
+  c     <- mvtnorm::rmvnorm(n, mean=rep(0,p), sigma=sigma)
   
   # DESIGN MATRIX FOR THE OUTCOME MODEL
   muMatT <- model.matrix(as.formula(paste("~(",paste("c[,",1:ncol(c),"]", collapse="+"),")")))
-  parms3 <- rep(3,5)
-  parms4 <- rep(log(1.5),5)
-  beta   <- parms3; beta <- c(120, beta)
+  parmsC <- rep(log(1.5),c_number)
   
   # DESIGN MATRIX FOR THE PROPENSITY SCORE MODEL
-  piMatT  <- model.matrix(as.formula(paste("~(",paste("c[,",1:ncol(c),"]", collapse="+"),")")))
-  piMatT2 <- model.matrix(as.formula(paste("~(",paste("c[,",1:ncol(c),"]", collapse="+"),")")))
-  theta   <- c(-.5,parms4) # assumed coefficients of propensity score model
-  theta2  <- c(-.5,parms4)
+  piMatX  <- model.matrix(as.formula(paste("~(",paste("c[,",1:ncol(c),"]", collapse="+"),")")))
+  piMatM  <- model.matrix(as.formula(paste("~(",paste("c[,",1:ncol(c),"]", collapse="+"),")")))
+  thetaX  <- c(-.5,parmsC) # assumed coefficients of propensity score model
+  thetaM  <- c(-.5,parmsC)
   
   # PROPENSITY SCORE MODEL
   ## pi is an actual parameter in base R, so good practice not to overwrite
-  pi_x   <- expit(piMatT%*%theta)
-  pi_m <- expit(piMatT2%*%theta2)
+  pi_x <- expit(piMatX%*%thetaX)
+  pi_m <- expit(piMatM%*%thetaM)
   x    <- rbinom(n,1,pi_x)
   m    <- rbinom(n,1,pi_m)
   
   # OUTCOME MODEL: EXPOSURE VALUE UNDER M == 0 IS 7.5; VALUE UNDER M = 1 IS -7.5
-  mu_y <- expit(-log((1/.2)-1) - log(param1)*pi_x - log(7.5)*pi_m + 
-                  log(param2)*pi_x*pi_m + log(param1)*x+ log(7.5)*m - log(param2)*x*m)
+  mu_y <- expit(-log((1/.2)-1) - log(param1)*pi_x - log(7.5)*pi_m + log(param2)*pi_x*pi_m + # this is an approximation to the balanced intercept (c's are not included)
+                 log(param1)*x+ log(7.5)*m - log(param2)*x*m + # this is the exposure and modifer effect
+                  c%*%parmsC # this is the confounder-outcome part
+                )
   
   y <- rbinom(n, 1, mu_y)
 
   dat <- data.frame(y,m,c,x)
-  names(dat) <- c("y","m",paste0("c",1:5),"x")
+  names(dat) <- c("y","m",paste0("c",1:c_number),"x")
   
   ## DATA GENERATION FINISHED; DATA ANALYSIS START
+
+  # ORACLE MODEL, G COMP
+  mod_form <- as.formula(paste("y ~ x + m + x*m +", paste0("c", 1:c_number, collapse = "+")))
+  mod_true <- glm(mod_form, data = dat, family = binomial(link = "logit"))
   
-  # TRUE MODEL
-  mod_true <- lm(y ~ x + m + x*m + c1 + c2 + c3 + c4 + c5, data = dat)
-  c_matrix1 <- c(0,1,0,0,0,0,0,0,0) # ATE among m = 0
-  c_matrix2 <- c(0,1,0,0,0,0,0,0,1) # ATE among m = 1; NB: r puts interaction coefficient at end
+  # c_matrix1 <- c(0, (as.matrix(attr(summary(mod_true)$terms,"term.labels")) == c("x")))
+  # c_matrix2 <- c_matrix1 + c(0, (as.matrix(attr(summary(mod_true)$terms,"term.labels")) == c("x:m")))
+  # 
+  # ate_m0 <- c(coef(mod_true) %*% c_matrix1, 
+  #             sqrt(t(c_matrix1) %*% vcov(mod_true) %*% c_matrix1))
+  # 
+  # ate_m1 <- c(coef(mod_true) %*% c_matrix2, 
+  #             sqrt(t(c_matrix2) %*% vcov(mod_true) %*% c_matrix2))
   
-  ate_m0 <- c(coef(mod_true) %*% c_matrix1, 
-              sqrt(t(c_matrix1) %*% vcov(mod_true) %*% c_matrix1))
+  mu1 <- mean(predict(mod_true, newdata = transform(dat, x = 1), type = "response"))
+  mu0 <- mean(predict(mod_true, newdata = transform(dat, x = 0), type = "response"))
   
-  ate_m1 <- c(coef(mod_true) %*% c_matrix2, 
-              sqrt(t(c_matrix2) %*% vcov(mod_true) %*% c_matrix2))
+  ate_gcomp <- mu1 - mu0
   
-  # Qi: here are your tasks
-  ## Ultimate goal: get one mean difference for M = 0, and one for M = 1
+  mu11 <- mean(predict(mod_true, newdata = transform(dat, x = 1, m = 1), type = "response"))
+  mu01 <- mean(predict(mod_true, newdata = transform(dat, x = 0, m = 1), type = "response"))
   
-  W_forest = regression_forest(
-    X = as.matrix(data.frame(c,m)), 
-    Y = as.matrix(x),
-    num.trees = 2000,
-    sample.weights = NULL,
-    clusters = NULL,
-    equalize.cluster.weights = FALSE,
-    sample.fraction = 0.5,
-    min.node.size = 5,
-    honesty = TRUE,
-    honesty.fraction = 0.5,
-    honesty.prune.leaves = TRUE,
-    alpha = 0.05,
-    imbalance.penalty = 0
-    )
+  ate_m1_gcomp <- mu11 - mu01
   
-  W.hat = predict(W_forest)$predictions
+  mu10 <- mean(predict(mod_true, newdata = transform(dat, x = 1, m = 0), type = "response"))
+  mu00 <- mean(predict(mod_true, newdata = transform(dat, x = 0, m = 0), type = "response"))
   
-  Y_forest = regression_forest(
-    X = as.matrix(data.frame(c,m)), 
-    Y = as.matrix(y),
-    num.trees = 2000,
-    sample.weights = NULL,
-    clusters = NULL,
-    equalize.cluster.weights = FALSE,
-    sample.fraction = 0.5,
-    min.node.size = 5,
-    honesty = TRUE,
-    honesty.fraction = 0.5,
-    honesty.prune.leaves = TRUE,
-    alpha = 0.05,
-    imbalance.penalty = 0
-    )
+  ate_m0_gcomp <- mu10 - mu00
   
-  Y.hat = predict(Y_forest)$predictions
+  boot_func <- function(data, index){
+    
+    boot_dat <- data[index, ]
+    
+    mod_true_ <- glm(mod_form, data = boot_dat, family = binomial(link = "logit"))
+    
+    mu1_ <- mean(predict(mod_true_, newdata = transform(boot_dat, x = 1), type = "response"))
+    mu0_ <- mean(predict(mod_true_, newdata = transform(boot_dat, x = 0), type = "response"))
+    
+    ate_gcomp_ <- mu1_ - mu0_
+    
+    mu11_ <- mean(predict(mod_true_, newdata = transform(boot_dat, x = 1, m = 1), type = "response"))
+    mu01_ <- mean(predict(mod_true_, newdata = transform(boot_dat, x = 0, m = 1), type = "response"))
+    
+    ate_m1_gcomp_ <- mu11_ - mu01_
+    
+    mu10_ <- mean(predict(mod_true_, newdata = transform(boot_dat, x = 1, m = 0), type = "response"))
+    mu00_ <- mean(predict(mod_true_, newdata = transform(boot_dat, x = 0, m = 0), type = "response"))
+    
+    ate_m0_gcomp_ <- mu10_ - mu00_
+
+    return(c(ate_gcomp_,
+             ate_m0_gcomp_,
+             ate_m1_gcomp_))
+        
+  }
   
-  cf <- causal_forest(
-    X = data.frame(c,m), 
-    Y = y, 
-    W = x,
-    Y.hat = Y.hat, 
-    W.hat = W.hat, 
-    num.trees = 2000, 
-    tune.parameters = "all"
-    )
+  boot_res <- boot(boot_func, data = dat, R = 500)
   
-  ate_m1_grf <- average_treatment_effect(cf, subset = m == 1) 
-  ate_m0_grf <- average_treatment_effect(cf, subset = m == 0) 
+  ate_gcomp <- c(ate_gcomp, sd(boot_res$t[,1]))
+  names(ate_gcomp) <- c("estimate", "std.err")
   
-  # TMLE & AIPW
+  ate_m0_gcomp <- c(ate_m0_gcomp, sd(boot_res$t[,2]))
+  names(ate_m0_gcomp) <- c("estimate", "std.err")
   
-  print(paste("Constructing learners for TMLE & AIPW ... "))
+  ate_m1_gcomp <- c(ate_m1_gcomp, sd(boot_res$t[,3]))
+  names(ate_m1_gcomp) <- c("estimate", "std.err")
+
+  ## HERE WE HAVE CAUSAL FOREST CODE TO IDENTIFY APPROPORATE MODIFERS
+  ## 
+  covariates_matrix <- dat[,c("m", paste0("c", 1:c_number))]
+  covariates_matrix_x <- dat[,c("x", "m", paste0("c", 1:c_number))]
+  outcome <-  as.matrix(dat$y)
+  exposure <- as.matrix(dat$x)
+
+  # construct a sample size variable 
+  n <- nrow(dat)
   
-  lrnr_mean <- make_learner(Lrnr_mean)
-  lrnr_glm <- make_learner(Lrnr_glm)
+  # We use 10-fold cross fitting, and determine precisely which of the observations get assigned to each fold:
+  num.folds <- 10
+  folds <- sort(seq(n) %% num.folds) + 1
+  
+  # we construct a causal forest using the `causal_forest` function from the grf package:
+  forest <- causal_forest(X = covariates_matrix, 
+                          Y = outcome, 
+                          W = exposure, 
+                          num.trees = 2000,
+                          honesty = TRUE,
+                          min.node.size = 10,
+                          alpha = .05, 
+                          imbalance.penalty = 0,
+                          stabilize.splits = TRUE,
+                          tune.parameters = "all",
+                          tune.num.trees = 200,
+                          tune.num.reps = 50,
+                          tune.num.draws = 1000,
+                          compute.oob.predictions = TRUE,
+                          num.threads = 10,
+                          seed = 123,
+                          clusters = folds)
+  
+  tau.hat = predict(forest)$predictions
+  
+  ## COMPUTE THE ATE FROM THE CAUSAL FOREST ALGORITHM
+  # we then use the `average_treatment_effect()` function to obtain an ATE estimate
+  cf_ate <- average_treatment_effect(forest)
+  
+  blp_cf <- tidy(best_linear_projection(forest, covariates_matrix)) %>% 
+    filter(term != "(Intercept)") %>% 
+    arrange(desc(abs(statistic))) %>% 
+    mutate(parameter1 = param1,
+           parameter2 = param2, 
+           sample_size = n, 
+           confounder_number = c_number, 
+           seed_number = nsim, 
+           method = "BLP_causal_forest")
+  ## need to pick the "strong" ones from this, and store the results
+  ## what we should do is rank the |test statistic| and pick the first one to check if it's m
+  ## maybe keep this whole thing??
+  
+  aipw_scores <- get_scores(forest,
+                           subset = NULL,
+                           debiasing.weights = NULL,
+                           num.trees.for.weights = 2000
+                           )
+  
+  fmla <- as.formula(aipw_scores ~ factor(m))
+  score_reg <- lm(fmla, 
+                  data=transform(dat, aipw_scores=aipw_scores))
+  
+  c_matrix1 <- c(1, 0)
+  c_matrix2 <- c(1, 1)
+
+  cf_cate_m0 <- data.frame(t(c(coef(score_reg) %*% c_matrix1, 
+                             sqrt(t(c_matrix1) %*% vcovHC(score_reg, type = "HC3") %*% c_matrix1))
+                             ))
+  names(cf_cate_m0) <- c("estimate", "std.err")
+
+  cf_cate_m1 <- data.frame(t(c(coef(score_reg) %*% c_matrix2, 
+                               sqrt(t(c_matrix2) %*% vcovHC(score_reg, type = "HC3") %*% c_matrix2))
+  ))
+  names(cf_cate_m1) <- c("estimate", "std.err")
+  
+
+  
+  # DO THE EXACT SAME FOR DRLEARNER.
+  
+  
+  mean_learner <- "SL.mean"
+  glm_learner <- "SL.glm"
   
   # ranger learner
-  grid_params <- list(num.trees = c(250, 1000),
-                      mtry = c(3,4),
-                      min.node.size = c(50,100))
-  grid <- expand.grid(grid_params, KEEP.OUT.ATTRS = FALSE)
-  lrnr_ranger <- vector("list", length = nrow(grid))
-  for(i in 1:nrow(grid)){
-    lrnr_ranger[[i]] <- make_learner(Lrnr_ranger, 
-                                     num.trees=grid[i,]$num.trees, 
-                                     mtry=grid[i,]$mtry,
-                                     min.node.size=grid[i,]$min.node.size)
-  }
-  ########################################################################
-  #lrnr_ranger <- make_learner(Lrnr_ranger)  ###########  FLAG! ###########
-  ########################################################################
+  ranger_learner <- "SL.ranger"
   
   # glmnet learner
-  grid_params <- seq(0,1,by=.25)
-  lrnr_glmnet <- vector("list", length = length(grid_params))
-  for(i in 1:length(grid_params)){
-    lrnr_glmnet[[i]] <- make_learner(Lrnr_glmnet, alpha = grid_params[i])
-  }
-  ########################################################################
-  #lrnr_glmnet <- make_learner(Lrnr_glmnet)  ###########  FLAG! ###########
-  ########################################################################
+  glmnet_learner <- "SL.glmnet"
   
   # xgboost learner
-  grid_params <- list(max_depth = c(4, 6),
-                      eta = c(0.1, 0.2),
-                      nrounds = c(100, 500)
-  )
-  grid <- expand.grid(grid_params, KEEP.OUT.ATTRS = FALSE)
-  lrnr_xgboost <- vector("list", length = nrow(grid))
-  for(i in 1:nrow(grid)){
-    lrnr_xgboost[[i]] <- make_learner(Lrnr_xgboost, max_depth=grid[i,]$max_depth, eta=grid[i,]$eta)
-  }
-  ########################################################################
-  #lrnr_xgboost <- make_learner(Lrnr_xgboost)  ##########  FLAG! ##########
-  ########################################################################
+  xgboost_learner <- "SL.xgboost"
   
   # earth learner
-  grid_params <- c(3,4,5)
-  lrnr_earth <- vector("list", length = length(grid_params))
-  for(i in 1:length(grid_params)){
-    lrnr_earth[[i]] <- make_learner(Lrnr_earth, degree = grid_params[i])
-  }
-  ########################################################################
-  ##lrnr_earth <- make_learner(Lrnr_earth)  ############  FLAG! ############
-  ########################################################################
+  earth_learner <- "SL.earth"
   
-  sl_ranger <- make_learner(Stack, unlist(list(lrnr_ranger), 
-                                    recursive = TRUE))
-  sl_xgboost <- make_learner(Stack, unlist(list(lrnr_xgboost), 
-                                          recursive = TRUE))
-  sl_tree <- make_learner(Stack, unlist(list(lrnr_ranger,
-                                               lrnr_xgboost), 
-                                          recursive = TRUE))
-  sl_ <- make_learner(Stack, unlist(list(lrnr_ranger,
-                                         lrnr_xgboost,
-                                         lrnr_mean,
-                                         lrnr_glm,
-                                         lrnr_earth,
-                                         lrnr_glmnet), 
-                                        recursive = TRUE))
+  sl_lib <- c(ranger_learner,
+              glmnet_learner, 
+              xgboost_learner, 
+              mean_learner,
+              glm_learner)
   
-  # DEFINE SL_Y AND SL_A 
-  # We only need one, because they're the same
+  # Specify the number of folds for V-fold cross-validation
+  # Use same folds as used for causal_forest function
+  # Doing cross-validation this way automatically deploys cross-fitting
+  fold_dat <- tibble(id = 1:n, folds)
+  fold_index <- split(fold_dat$id, fold_dat$folds)
   
-  learners_ <- c(sl_ranger, sl_xgboost, sl_tree, sl_)
-  tmle0_list <- tmle1_list <- aipw0_list <- aipw1_list <- list()
-
-  for (i in 1:length(learners_)){
-    
-  Q_learner <- Lrnr_sl$new(learners = learners_[i], 
-                           metalearner = Lrnr_nnls$new(convex=T))
-  g_learner <- Lrnr_sl$new(learners = learners_[i], 
-                           metalearner = Lrnr_nnls$new(convex=T))
-  learner_list <- list(Y = Q_learner,
-                       A = g_learner)
+  fit_mu <- CV.SuperLearner(Y = outcome,
+                            X = covariates_matrix_x, 
+                            method = "method.NNLS", 
+                            family = binomial,
+                            SL.library = sl_lib,
+                            cvControl = list(V = num.folds, validRows = fold_index),
+                            control = list(saveCVFitLibrary = T),
+                            parallel = "seq",
+                            verbose = T)
   
-  ######################################################################
+  fit_pi <- CV.SuperLearner(Y = exposure,
+                            X = covariates_matrix,
+                            method = "method.NNLS", 
+                            family = binomial,
+                            SL.library = sl_lib,
+                            cvControl = list(V = num.folds, validRows = fold_index),#, stratifyCV = TRUE),
+                            control = list(saveCVFitLibrary = T),
+                            parallel = "seq",
+                            verbose = T)
   
-  # PREPARE THE THINGS WE WANT TO FEED IN TO TMLE3
-  ate_spec <- tmle_OR(contrast_level = 1, baseline_level = 0)
+  pscore <- as.matrix(fit_pi$SL.predict)
   
-  nodes_ <- list(W = c("c1", "c2", "c3", "c4", "c5"), 
-                 A = "x", 
-                 Y = "y")
+  mu_hat <- as.matrix(fit_mu$SL.predict)
   
-  # RUN TMLE3 
-  print(paste("TMLE Version",i))
-  set.seed(123)
-  tmle0_list[[i]] <- tmle3(ate_spec, 
-                           subset(dat, m==0, select = -m), 
-                           nodes_, 
-                           learner_list)
-  tmle1_list[[i]] <- tmle3(ate_spec, 
-                           subset(dat, m==1, select = -m), 
-                           nodes_, 
-                           learner_list)
-
-  print(paste("AIPW Version",i))
-  aipw0_list[[i]] <- AIPW_tmle$new(A=dat[dat$m==0,]$x,
-                                   Y=dat[dat$m==0,]$y,
-                                   tmle_fit = tmle0_list[[i]],
-                                   verbose = T)$summary()
-  
-  aipw1_list[[i]] <- AIPW_tmle$new(A=dat[dat$m==1,]$x,
-                                   Y=dat[dat$m==1,]$y,
-                                   tmle_fit = tmle1_list[[i]],
-                                   verbose = TRUE)$summary()
-  
+  mu_hat1 <- NULL
+  for(i in 1:num.folds){
+    mu_hat1 <- rbind(mu_hat1, 
+                     predict(fit_mu$AllSL[[i]],
+                             newdata = base::transform(
+                               covariates_matrix_x[fold_index[[i]],], x = 1), 
+                             onlySL=T)$pred)
   }
   
-  ate_m0_tmle_ranger <- cbind(tmle0_list[[1]]$estimates[[2]]$psi - tmle0_list[[1]]$estimates[[1]]$psi, 
-                              sqrt(var(tmle0_list[[1]]$estimates[[2]]$IC - tmle0_list[[1]]$estimates[[1]]$IC)/sum(1-m)))
+  mu_hat0 <- NULL
+  for(i in 1:num.folds){
+    mu_hat0 <- rbind(mu_hat0, 
+                     predict(fit_mu$AllSL[[i]],
+                             newdata = base::transform(
+                               covariates_matrix_x[fold_index[[i]],], x = 0), 
+                             onlySL=T)$pred)
+  }
   
-  ate_m1_tmle_ranger <- cbind(tmle1_list[[1]]$estimates[[2]]$psi - tmle1_list[[1]]$estimates[[1]]$psi, 
-                              sqrt(var(tmle1_list[[1]]$estimates[[2]]$IC - tmle1_list[[1]]$estimates[[1]]$IC)/sum(1-m)))
+  ## aipw
+  aipw_func <- function(exposure, outcome, pscore, mu_hat, mu_hat0, mu_hat1){
+    aipw_score <- ((2*exposure - 1)*(outcome - mu_hat))/((2*exposure - 1)*pscore + (1 - exposure)) + (mu_hat1 - mu_hat0)
+    return(aipw_score)
+  }
+  
+  aipw_score <- aipw_func(exposure, 
+                          outcome, 
+                          pscore, 
+                          mu_hat, 
+                          mu_hat0, 
+                          mu_hat1)
+  colnames(aipw_score) <- NULL
+  
+  aipw_psi <- mean(aipw_score)
+  
+  aipw_se <- sd(aipw_score)/sqrt(n)
+  
+  aipw_ate <- data.frame(t(c(aipw_psi, aipw_se)))
+  names(aipw_ate) <- c("estimate", "std.err")
+  
+  ## best linear projection
+  score_dat <- data.frame(aipw_score, covariates_matrix)
+  score_fit <- lm(aipw_score ~ ., data = score_dat)
+  
+  blp_aipw <- coeftest(score_fit, vcov = vcovHC(score_fit, type = "HC3"))
+  
+  blp_drl <- tidy(blp_aipw) %>% 
+    filter(term != "(Intercept)") %>% 
+    arrange(desc(abs(statistic))) %>% 
+    mutate(parameter1 = param1,
+           parameter2 = param2, 
+           sample_size = n, 
+           confounder_number = c_number,
+           seed_number = nsim, 
+           method = "BLP_dr_learner")
+  
+  fmla <- as.formula(aipw_score ~ factor(m))
+  score_reg <- lm(fmla, 
+                  data=transform(dat, aipw_scores=aipw_score))
+  
+  c_matrix1 <- c(1, 0)
+  c_matrix2 <- c(1, 1)
+  
+  drl_cate_m0 <- data.frame(t(c(coef(score_reg) %*% c_matrix1, 
+                               sqrt(t(c_matrix1) %*% vcovHC(score_reg, type = "HC3") %*% c_matrix1))
+  ))
+  names(drl_cate_m0) <- c("estimate", "std.err")
+  
+  drl_cate_m1 <- data.frame(t(c(coef(score_reg) %*% c_matrix2, 
+                               sqrt(t(c_matrix2) %*% vcovHC(score_reg, type = "HC3") %*% c_matrix2))
+  ))
+  names(drl_cate_m1) <- c("estimate", "std.err")
 
-  ate_m0_tmle_xgboost <- cbind(tmle0_list[[2]]$estimates[[2]]$psi - tmle0_list[[2]]$estimates[[1]]$psi, 
-                               sqrt(var(tmle0_list[[2]]$estimates[[2]]$IC - tmle0_list[[2]]$estimates[[1]]$IC)/sum(1-m)))
+  # objects to save:
   
-  ate_m1_tmle_xgboost <- cbind(tmle1_list[[2]]$estimates[[2]]$psi - tmle1_list[[2]]$estimates[[1]]$psi, 
-                               sqrt(var(tmle1_list[[2]]$estimates[[2]]$IC - tmle1_list[[2]]$estimates[[1]]$IC)/sum(1-m)))
-  
-  ate_m0_tmle_tree <- cbind(tmle0_list[[3]]$estimates[[2]]$psi - tmle0_list[[3]]$estimates[[1]]$psi, 
-                            sqrt(var(tmle0_list[[3]]$estimates[[2]]$IC - tmle0_list[[3]]$estimates[[1]]$IC)/sum(1-m)))
-  
-  ate_m1_tmle_tree <- cbind(tmle1_list[[3]]$estimates[[2]]$psi - tmle1_list[[3]]$estimates[[1]]$psi, 
-                            sqrt(var(tmle1_list[[3]]$estimates[[2]]$IC - tmle1_list[[3]]$estimates[[1]]$IC)/sum(1-m)))
-  
-  ate_m0_tmle_stacked <- cbind(tmle0_list[[4]]$estimates[[2]]$psi - tmle0_list[[4]]$estimates[[1]]$psi, 
-                               sqrt(var(tmle0_list[[4]]$estimates[[2]]$IC - tmle0_list[[4]]$estimates[[1]]$IC)/sum(1-m)))
-  
-  ate_m1_tmle_stacked <- cbind(tmle1_list[[4]]$estimates[[2]]$psi - tmle1_list[[4]]$estimates[[1]]$psi, 
-                               sqrt(var(tmle1_list[[4]]$estimates[[2]]$IC - tmle1_list[[4]]$estimates[[1]]$IC)/sum(1-m)))
-  
-  
-  ate_m0_aipw_ranger <- aipw0_list[[1]]$result["Risk Difference",1:2]
-  
-  ate_m1_aipw_ranger <- aipw1_list[[1]]$result["Risk Difference",1:2]
-  
-  ate_m0_aipw_xgboost <- aipw0_list[[2]]$result["Risk Difference",1:2]
-  
-  ate_m1_aipw_xgboost <- aipw1_list[[2]]$result["Risk Difference",1:2]
-  
-  ate_m0_aipw_tree <- aipw0_list[[3]]$result["Risk Difference",1:2]
-    
-  ate_m1_aipw_tree <- aipw0_list[[3]]$result["Risk Difference",1:2]
-    
-  ate_m0_aipw_stacked <- aipw0_list[[4]]$result["Risk Difference",1:2]
-  
-  ate_m1_aipw_stacked <- aipw0_list[[4]]$result["Risk Difference",1:2]
-  
-  print(paste("Creating res object ... "))
-  
-  res <- data.frame(
-	estimator = c("CATE_m0_glm","CATE_m1_glm",
-	              "CATE_m0_grf","CATE_m1_grf",
-	              "CATE_m0_tmle_ranger","CATE_m1_tmle_ranger",
-	              "CATE_m0_tmle_xgboost","CATE_m1_tmle_xgboost",
-	              "CATE_m0_tmle_tree","CATE_m1_tmle_tree",
-	              "CATE_m0_tmle_stacked","CATE_m1_tmle_stacked",
-	              "CATE_m0_aipw_ranger", "CATE_m1_aipw_ranger",
-	              "CATE_m0_aipw_xgboost","CATE_m1_aipw_xgboost",
-	              "CATE_m0_aipw_tree",   "CATE_m1_aipw_tree",
-	              "CATE_m0_aipw_stacked","CATE_m1_aipw_stacked"),
-    rbind(
-      ate_m0,ate_m1,
-      ate_m0_grf,ate_m1_grf,
-      ate_m0_tmle_ranger,ate_m1_tmle_ranger,
-      ate_m0_tmle_xgboost,ate_m1_tmle_xgboost,
-      ate_m0_tmle_tree,ate_m1_tmle_tree,
-      ate_m0_tmle_stacked,ate_m1_tmle_stacked,
-      ate_m0_aipw_ranger,ate_m1_aipw_ranger,
-      ate_m0_aipw_xgboost,ate_m1_aipw_xgboost,
-      ate_m0_aipw_tree,ate_m1_aipw_tree,
-      ate_m0_aipw_stacked,ate_m1_aipw_stacked
-    ),
-	parameter1 = param1, 
-	parameter2 = param2,
-	simulation_number = nsim
+  res <- rbind(
+    data.frame(estimator = "gComp_ate",            seed_nubmer = nsim, sample_size = n, parameter1 = param1, parameter2 = param2, t(ate_gcomp)),
+    data.frame(estimator = "gComp_cate_m0",        seed_nubmer = nsim, sample_size = n, parameter1 = param1, parameter2 = param2, t(ate_m0_gcomp)),
+    data.frame(estimator = "gComp_cate_m1",        seed_nubmer = nsim, sample_size = n, parameter1 = param1, parameter2 = param2, t(ate_m1_gcomp)),
+    data.frame(estimator = "causal_forest_ate",    seed_nubmer = nsim, sample_size = n, parameter1 = param1, parameter2 = param2, t(cf_ate)),
+    data.frame(estimator = "causal_forest_ate_m0", seed_nubmer = nsim, sample_size = n, parameter1 = param1, parameter2 = param2, cf_cate_m0),
+    data.frame(estimator = "causal_forest_ate_m1", seed_nubmer = nsim, sample_size = n, parameter1 = param1, parameter2 = param2, cf_cate_m1),
+    data.frame(estimator = "DRLearner_ate",        seed_nubmer = nsim, sample_size = n, parameter1 = param1, parameter2 = param2, aipw_ate),
+    data.frame(estimator = "DRLearner_ate_m0",     seed_nubmer = nsim, sample_size = n, parameter1 = param1, parameter2 = param2, drl_cate_m0),
+    data.frame(estimator = "DRLearner_ate_m1",     seed_nubmer = nsim, sample_size = n, parameter1 = param1, parameter2 = param2, drl_cate_m1)
   )
+  
+  func_output <- list(blp_cf,
+                      blp_drl,
+                      res)
+  
+  return(func_output)
 
-  print(paste("Writing to file ... "))
-  
-  write_csv(res, file = here("data",paste("simulation_results_",nsim,".csv")), append = T)
-  
-  print(paste("simulation", nsim, "end"))
-  return(res)
-}                                  
+}
+
+cnum=5
+number_sims=3
+sample_size=1000
+run_loop=1
+
+results <- lapply(1:number_sims, 
+                  function(x) cluster_sim(nsim = x,
+                                          c_number = cnum,
+                                          sample_size = sample_size, 
+                                          param1 = 2, 
+                                          param2 = 2)
+)
 
 ### RUNNING THE FUNCTION
-phi_dat <- list(phi = seq(-4,4,by=2), 
-                phi2 = seq(-6,6,by=2))
+phi_dat <- list(phi = seq(-2,2,by=2), 
+                phi2 = seq(-2,2,by=2))
 
 data_grid <- expand.grid(phi_dat, KEEP.OUT.ATTRS = FALSE)
 
 parallel::detectCores()
 
-n.cores <- parallel::detectCores()
+n.cores <- parallel::detectCores() - 2
 
 my.cluster <- parallel::makeCluster(
   n.cores, 
@@ -380,28 +410,56 @@ doParallel::registerDoParallel(cl = my.cluster)
 
 foreach::getDoParRegistered()
 
+number_sims <- as.numeric(args[1])
+cat(paste("Number of Simulations:", number_sims, "\n"))
+sample_size <- as.numeric(args[2])
+cat(paste("Sample Size for Each Sim:", sample_size), "\n")
+run_loop <- as.numeric(args[3])
+cat(paste("The Loop Currently Running is:", run_loop), "\n")
+cnum <- as.numeric(args[4])
+cat(paste("The Number of Confounders is:", cnum), "\n")
+
+cnum=5
+number_sims=3
+sample_size=5000
+run_loop=1
+
+
 par_res <- foreach(i = 1:nrow(data_grid)) %dopar% {
-#par_res <- foreach(i = 1:n.cores) %dopar% {
   
   print(paste("for loop iteration",i))
   
-  results <- do.call(rbind,
-                      lapply(1:number_sims, 
-                                function(x) cluster_sim(nsim=x,
-                                                        rloop = run_loop,
-                                                        sample_size=sample_size, 
-                                                        param1 = data_grid[i,]$phi, 
-                                                        param2 = data_grid[i,]$phi2)
+  results <- lapply(1:number_sims, 
+                    function(x) cluster_sim(nsim = x,
+                                            c_number = cnum,
+                                            sample_size = sample_size, 
+                                            param1 = data_grid[i,]$phi, 
+                                            param2 = data_grid[i,]$phi2)
                              )
-                      )
   
 }
 
 parallel::stopCluster(cl = my.cluster)
 
-par_res <- do.call(rbind, par_res)
+## first bracket: indexing over parameters phi and phi2
+## second bracket: indexing over simulation numbers
+## third bracket: indexing over result - blp_cf, blp_drl, and simulation results
 
-rownames(par_res) <- NULL
+k <- 1:(nrow(data_grid)*number_sims)
+blp_cf <- blp_drl <- sim_res <- NULL
+for(i in 1:nrow(data_grid)){
+  for(j in 1:number_sims){
+    blp_cf[k]  <- list(par_res[[i]][[j]][[1]])
+    blp_drl[k] <- list(blp_drl, par_res[[i]][[j]][[2]])
+    sim_res[k] <- list(sim_res, par_res[[i]][[j]][[3]])
+  }
+}
+
+blp_cf <- do.call(rbind,blp_cf)
+
+blp_drl <- par_res[[1]][[1]][[2]]
+
+sim_res <- par_res[[2]][[2]][[3]]
 
 write_rds(par_res, 
           file = here("data",paste0("simulation_results_",number_sims,".rds"))
